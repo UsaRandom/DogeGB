@@ -13,9 +13,6 @@ build/
 *.bak
 *.tmp
 
-# Generated entropy data
-entropy_data.h
-
 # OS files
 .DS_Store
 Thumbs.db
@@ -29,6 +26,4 @@ Thumbs.db
 #gbdk tools
 /gbdk/
 
-# Asset conversion temporaries
-src/assets/*.c
-src/assets/*.h
+/test/mnemonic_to_address

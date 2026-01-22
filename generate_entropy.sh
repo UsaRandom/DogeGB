@@ -40,6 +40,8 @@ for ((i=0; i<${#SALT}; i+=2)); do
 done
 
 
+mkdir -p build
+
 # Create the header file
 cat > "build/$HEADER_FILE" << EOF
 #ifndef ENTROPY_DATA_H
