@@ -1,0 +1,126 @@
+
+#include <gb/gb.h>
+#include <gb/cgb.h>
+
+#include <gbdk/platform.h>
+#include <gbdk/font.h>
+#include <gbdk/console.h>
+#include <stdio.h>
+#include <string.h>
+#include <menu.h>
+
+#include <splash.h>
+#include <progress.h>
+#include <draw.h>
+#include <bonktime.h>
+#include <wallet.h>
+#include "wallet_sram.h"
+
+#include "src/crypto/mnemonic.h"
+#include "src/crypto/hd_wallet.h"
+#include "src/crypto/secp256k1.h"
+#include "src/crypto/bip39_wordlist.h"
+
+#include "word_input.h"
+#include "states.h"
+
+#include "entropy_data.h"
+
+
+unsigned char seed[64];
+unsigned char privkey[32];
+unsigned char pubkey[33];
+
+char address[35];
+
+AppState current_state;
+uint8_t current_slot;
+uint8_t gen_type;
+char words[12][9];
+uint8_t word_index;
+uint8_t test_word_indices[2];
+char temp_buffer[32];
+wallet current_wallet;
+
+uint8_t current_mode = 0;
+
+char menu_strings[16][16];
+const char* menu_options[16];
+
+
+extern void handle_slot_selection(void);
+extern void handle_gen_type_selection(void) BANKED;
+extern void handle_bonk_game(void) BANKED;
+extern void handle_word_entry(void) BANKED;
+extern void handle_confirm_exit(void) BANKED;
+extern void handle_random_word_test(void) BANKED;
+extern void handle_show_generated_words(void) BANKED;
+extern void handle_confirm_generated_words(void) BANKED;
+extern void handle_generate_address(void) BANKED;
+extern void handle_save_wallet(void) BANKED;
+extern void handle_wallet_menu(void) BANKED;
+extern void handle_bonktime_entropy(void) BANKED;
+
+
+void main(void)
+{
+
+    if(_cpu == CGB_TYPE) {
+        cpu_fast();
+    }    
+    
+    current_state = STATE_SLOT_SELECTION;
+
+    current_slot = 0;
+    gen_type = 0;
+    word_index = 0;
+
+ 
+    show_doge_splash();
+    init_draw();
+    SHOW_BKG;
+    DISPLAY_ON;
+
+    while (1) {
+        switch (current_state) {
+
+            case STATE_SLOT_SELECTION:
+                handle_slot_selection();
+                break;
+
+            case STATE_BONKTIME_GAME:
+                handle_bonk_game();
+                break;
+
+            case STATE_GEN_TYPE_SELECTION:
+                handle_gen_type_selection();
+                break;
+
+            case STATE_BONKTIME_ENTROPY:
+                handle_bonktime_entropy();
+                break;
+
+            case STATE_SHOW_GENERATED_WORDS:
+                handle_show_generated_words();
+                break;
+
+            case STATE_CONFIRM_GENERATED_WORDS:
+                handle_confirm_generated_words();
+                break;
+
+            case STATE_GENERATE_ADDRESS:
+                handle_generate_address();
+                break;
+
+            case STATE_WALLET_MENU:
+                handle_wallet_menu();
+                break;
+
+
+            case STATE_IDLE:
+            default:
+                vsync();
+                break;
+        }
+    }
+}

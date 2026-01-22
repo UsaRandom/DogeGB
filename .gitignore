@@ -1,0 +1,34 @@
+# Build artifacts
+build/
+*.gb
+*.map
+*.sym
+*.noi
+*.ihx
+*.lk
+*.adb
+*.rel
+
+# Temporary files
+*.bak
+*.tmp
+
+# Generated entropy data
+entropy_data.h
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+#gbdk tools
+/gbdk/
+
+# Asset conversion temporaries
+src/assets/*.c
+src/assets/*.h
