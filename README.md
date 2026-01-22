@@ -15,7 +15,7 @@ Then:
 make
 ```
 
-Requires GBDK (Game Boy Development Kit).
+*Build may need some adjustments to run on Windows/Linux*
 
 ## Testing
 
