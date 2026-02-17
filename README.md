@@ -1,6 +1,6 @@
 # DogeGB
 
-GameBoy's First Cold Storage Wallet for Dogecoin!
+Game Boy's First Cold Storage Wallet for Dogecoin!
 
 <img width="751" height="580" alt="image" src="https://github.com/user-attachments/assets/e7b4812a-3430-412b-b227-45ab742a79ad" />
 
