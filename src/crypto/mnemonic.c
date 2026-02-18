@@ -47,25 +47,32 @@ void do_sha256(const uint8_t *data, uint16_t len, uint8_t *hash) {
     sha256_final(&ctx, hash);
 }
 
-
 void generate_mnemonic(char words[12][9]) BANKED {
-
+    
     for (uint16_t i = 0; i < ENTROPY_POOL_SIZE; i++) {
         entropy_pool[i] ^= entropy_pool[(i + 37) & (ENTROPY_POOL_SIZE - 1)];
         entropy_pool[i] += entropy_pool[(i + 113) & (ENTROPY_POOL_SIZE - 1)];
     }
-
     for (uint16_t i = 0; i < ENTROPY_POOL_SIZE; i++) {
         entropy_pool[i] ^= build_salt[i % BUILD_SALT_SIZE];
         entropy_pool[i] += build_salt[(i + 13) % BUILD_SALT_SIZE];
     }
 
-    
     uint8_t hash[32];
     SHA256_CTX ctx;
     sha256_init(&ctx);
     sha256_update(&ctx, entropy_pool, ENTROPY_POOL_SIZE);
     sha256_final(&ctx, hash);
+
+    uint8_t entropy[16];
+    memcpy(entropy, hash, 16); 
+
+    uint8_t cs_hash[32];
+    SHA256_CTX cs_ctx;
+    sha256_init(&cs_ctx);
+    sha256_update(&cs_ctx, entropy, 16);
+    sha256_final(&cs_ctx, cs_hash);
+    uint8_t checksum = cs_hash[0] >> 4;
 
     for (uint16_t i = 0; i < ENTROPY_POOL_SIZE; i++) {
         entropy_pool[i] ^= hash[i & 31];
@@ -75,21 +82,26 @@ void generate_mnemonic(char words[12][9]) BANKED {
     uint16_t bit_pos = 0;
     for (uint8_t w = 0; w < 12; w++) {
         uint16_t word_idx = 0;
-
         for (uint8_t b = 0; b < 11; b++) {
-            uint8_t byte_idx = bit_pos >> 3;
-            uint8_t shift = 7 - (bit_pos & 7);
-
-            if (hash[byte_idx] & (1u << shift)) {
-                word_idx |= (1u << (10 - b));
+            uint8_t bit;
+            if (bit_pos < 128) {
+                uint8_t byte_idx = bit_pos >> 3;
+                uint8_t shift = 7 - (bit_pos & 7);
+                bit = (entropy[byte_idx] & (1u << shift)) ? 1 : 0;
+            } else {
+                uint8_t cs_bit_pos = bit_pos - 128;
+                bit = (checksum & (1u << (3 - cs_bit_pos))) ? 1 : 0;
             }
 
+            if (bit) {
+                word_idx |= (1u << (10 - b));
+            }
             bit_pos++;
         }
-
         get_bip39_word(word_idx, words[w]);
     }
 }
+
 
 void mnemonic_to_seed(const char *mnemonic, uint8_t *seed) BANKED {
     const char *salt_prefix = "mnemonic";
