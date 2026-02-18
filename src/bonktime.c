@@ -46,7 +46,7 @@
 #define TARGET_RIGHT 5
 
 #define TARGET_NULL 6
-#define NUMBER_OF_PRESSES 48
+#define NUMBER_OF_PRESSES 72
 
 
 uint8_t _progress = 0;
@@ -399,7 +399,7 @@ uint8_t* bonktime(uint8_t mode) BANKED {
 
                         if(mode == BONKTIME_ENTROPY_MODE) {
                             seed_acc ^= DIV_REG; 
-                            _progress += 3;
+                            _progress += 2;
                             if (press_count < NUMBER_OF_PRESSES) {
                                 add_entropy(keys);
                                 press_count++;
@@ -433,7 +433,7 @@ uint8_t* bonktime(uint8_t mode) BANKED {
                         if(mode == BONKTIME_ENTROPY_MODE) {
                             // In entropy collection mode, each bonk adds entropy and progresses
                             seed_acc ^= DIV_REG; // Mix in current DIV_REG value
-                            _progress += 3;
+                            _progress += 2;
                             if (press_count < NUMBER_OF_PRESSES) {
                                 add_entropy(keys);
                                 press_count++;

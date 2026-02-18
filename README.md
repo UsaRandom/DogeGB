@@ -52,7 +52,7 @@ Entropy is the elephant in the room on these old devices. Modern hardware has gr
 
 The consequences of bad run-time entropy are catastrophic. A good example is the Milk Sad/Libbitcoin bug, where wallets were only seeded with system time (32 bits of entropy). This made address generation predictable and easy to brute force leading to over 2,600 wallets being pwned with losses estimated around $1 million.
 
-To attempt to generate a decent source of run-time entropy the 'Bonk Time!' mini game requires 48 button presses (may increase) where it polls input keys, hardware registers, and measures input deltas.
+To attempt to generate a decent source of run-time entropy the 'Bonk Time!' mini game requires 72 button presses where it polls input keys, hardware registers, and measures input deltas.
 
 ### Defense in Depth
 
