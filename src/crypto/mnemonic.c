@@ -8,6 +8,7 @@
 
 #include "mnemonic.h"
 #include "entropy_data.h"
+#include "hmac.h"
 
 // Extern declaration for entropy pool
 extern uint8_t entropy_pool[ENTROPY_POOL_SIZE];
@@ -58,11 +59,8 @@ void generate_mnemonic(char words[12][9]) BANKED {
         entropy_pool[i] += build_salt[(i + 13) % BUILD_SALT_SIZE];
     }
 
-    uint8_t hash[32];
-    SHA256_CTX ctx;
-    sha256_init(&ctx);
-    sha256_update(&ctx, entropy_pool, ENTROPY_POOL_SIZE);
-    sha256_final(&ctx, hash);
+    uint8_t hash[64];
+    hmac_sha512(hash, build_salt, BUILD_SALT_SIZE, entropy_pool, ENTROPY_POOL_SIZE);
 
     uint8_t entropy[16];
     memcpy(entropy, hash, 16); 
@@ -75,8 +73,8 @@ void generate_mnemonic(char words[12][9]) BANKED {
     uint8_t checksum = cs_hash[0] >> 4;
 
     for (uint16_t i = 0; i < ENTROPY_POOL_SIZE; i++) {
-        entropy_pool[i] ^= hash[i & 31];
-        entropy_pool[i] += hash[(i + 7) & 31];
+        entropy_pool[i] ^= hash[i & 63];      // updated to 64-byte hash
+        entropy_pool[i] += hash[(i + 7) & 63];
     }
 
     uint16_t bit_pos = 0;
