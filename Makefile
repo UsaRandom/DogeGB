@@ -58,7 +58,6 @@ SRC = src/main.c \
       src/crypto/pbkdf2.c \
       src/crypto/sha512.c \
       src/crypto/sha512_transform.c \
-      src/crypto/sha512_block.c \
       src/crypto/sha512_constants.c \
       src/crypto/hd_wallet.c \
       src/crypto/secp256k1.c \
