@@ -64,22 +64,20 @@ extern void handle_bonktime_entropy(void) BANKED;
 
 void main(void)
 {
-
     if(_cpu == CGB_TYPE) {
         cpu_fast();
-    }    
-    
+    }
+
+    show_doge_splash();
+    init_draw();
+    SHOW_BKG;
+    DISPLAY_ON;
+
     current_state = STATE_SLOT_SELECTION;
 
     current_slot = 0;
     gen_type = 0;
     word_index = 0;
-
- 
-    show_doge_splash();
-    init_draw();
-    SHOW_BKG;
-    DISPLAY_ON;
 
     while (1) {
         switch (current_state) {

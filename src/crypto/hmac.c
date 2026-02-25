@@ -1,4 +1,4 @@
-#pragma bank 5
+#pragma bank 4
 #include "hmac.h"
 #include "sha512.h"
 #include <string.h>

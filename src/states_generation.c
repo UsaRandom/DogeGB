@@ -1,5 +1,5 @@
 // src/states_generation.c
-#pragma bank 5
+#pragma bank 4
 
 #include <gb/gb.h>
 #include <stdio.h>

@@ -1,4 +1,4 @@
-#pragma bank 5
+#pragma bank 4
 #include "secp256k1.h"
 #include <string.h>
 #include "progress.h"

@@ -5,7 +5,7 @@
 #include <stdint.h>
 #include <gbdk/platform.h>
 #include <gbdk/metasprites.h>
-#pragma bank 10
+#pragma bank 6
 
 #define progress_bar_TILE_ORIGIN 0
 #define progress_bar_TILE_W 8

@@ -4,7 +4,7 @@
 #include <gbdk/platform.h>
 #include <gbdk/metasprites.h>
 
-#pragma bank 10
+#pragma bank 6
 
 const palette_color_t progress_bar_palettes[4] = {
 	 RGB8(  255,  255,  255), RGB8( 91,110,225), RGB8(  0,  0,  0), RGB8(  255,  255,  255)

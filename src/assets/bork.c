@@ -4,7 +4,7 @@
 #include <gbdk/platform.h>
 #include <gbdk/metasprites.h>
 
-#pragma bank 7
+#pragma bank 5
 
 const palette_color_t bork_palettes[4] = {
 	RGB8(253,251,245), RGB8(217,195,144), RGB8(194,158, 89), RGB8( 79, 67, 48)

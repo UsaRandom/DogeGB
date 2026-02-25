@@ -4,7 +4,7 @@ CC = ./gbdk/bin/lcc
 # Compiler flags
 CFLAGS = -msm83:gb \
          -Wl-yt0x1B \
-         -Wl-yo32 \
+         -Wl-yo8 \
          -Wl-ya4 \
          -Wb-ext=.rel \
          -Wm-yC \
@@ -63,6 +63,7 @@ SRC = src/main.c \
       src/crypto/secp256k1.c \
       src/crypto/hmac.c \
       src/crypto/ripemd160.c \
+      src/bitrot_rom.c \
       build/entropy_data.c
 
 
@@ -73,7 +74,7 @@ SRC = src/main.c \
 	./generate_entropy.sh
 
 # Asset conversion parameters
-bank = 10
+bank = 6
 
 .savedata:
 	$(CC) -Wf-ba0 -c -o build/wallet_sram.o src/wallet_sram.c
@@ -88,15 +89,15 @@ bank = 10
 	./gbdk/bin/png2asset ./raw_assets/dpadbutton_down.png -map -noflip -tile_origin 80 -b $(bank) -o ./src/assets/dpadbutton_down.c
 	./gbdk/bin/png2asset ./raw_assets/dpadbutton_right.png -map -noflip -tile_origin 198 -b $(bank) -o ./src/assets/dpadbutton_right.c
 	./gbdk/bin/png2asset ./raw_assets/dpadbutton_left.png -map -noflip -tile_origin 85 -b $(bank) -o ./src/assets/dpadbutton_left.c
-	./gbdk/bin/png2asset ./raw_assets/keyboard.png -map -noflip -tile_origin 88 -b 9 -use_map_attributes -o ./src/assets/keyboard.c
-	./gbdk/bin/png2asset ./raw_assets/keyboard_lightgrey.png -map -noflip -tile_origin 160 -b 9 -use_map_attributes -o ./src/assets/keyboard_lightgrey.c
+	./gbdk/bin/png2asset ./raw_assets/keyboard.png -map -noflip -tile_origin 88 -b 5 -use_map_attributes -o ./src/assets/keyboard.c
+	./gbdk/bin/png2asset ./raw_assets/keyboard_lightgrey.png -map -noflip -tile_origin 160 -b 5 -use_map_attributes -o ./src/assets/keyboard_lightgrey.c
 	./gbdk/bin/png2asset ./raw_assets/pepecoin.png -tile_origin 202 -b 1 -o ./src/assets/pepecoin.c
 	./gbdk/bin/png2asset ./raw_assets/bellscoin.png -tile_origin 202 -b 1 -o ./src/assets/bellscoin.c
 	./gbdk/bin/png2asset ./raw_assets/dogecoin.png -tile_origin 202 -b 1 -o ./src/assets/dogecoin.c
 
 #put the test 
 .test:
-	./generate_entropy.sh
+	python3 tools/generate_entropy.py
 	cd test && make
 	python3 test/test_crypto.py 100
 
@@ -108,5 +109,6 @@ bank = 10
 
 build/$(PROJECT_NAME).gb: $(SRC) build/wallet_sram.o
 	$(CC) $(CFLAGS) $(OPTFLAGS) -o $@ $^
+	python3 tools/patch_bitrot.py $@
 
 all: .clean .test .assets .savedata build/$(PROJECT_NAME).gb .postclean

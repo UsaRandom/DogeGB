@@ -1,4 +1,4 @@
-#pragma bank 5
+#pragma bank 4
 
 #include "bip39_wordlist.h"
 #include <gbdk/platform.h>

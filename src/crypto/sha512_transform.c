@@ -1,4 +1,4 @@
-#pragma bank 4
+#pragma bank 1
 #include "sha512_transform.h"
 #include <string.h>
 

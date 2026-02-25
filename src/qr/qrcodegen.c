@@ -22,7 +22,7 @@
  */
 
 #include <gbdk/platform.h>
-#pragma bank 9
+#pragma bank 5
 BANKREF(qrcodegen)
 
 // #define STANDALONE

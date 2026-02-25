@@ -5,7 +5,7 @@
 #include <stdbool.h>
 #include <stdio.h>
 
-#pragma bank 9
+#pragma bank 5
 #include "src/qr/qrcodegen.h"
 
 // See qrcodegen.h for setting the QR code version/capacity

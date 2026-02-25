@@ -14,7 +14,7 @@
 #include "word_input.h"
 #include "wallet.h"
 
-#pragma bank 9
+#pragma bank 5
 
 #define KEYBOARD_Y 12
 #define MAX_LEN 8
