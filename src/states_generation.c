@@ -16,6 +16,8 @@
 #include <wallet.h>
 #include "draw.h"
 
+#include "bitrot_rom.h"
+
 
 #include <gbdk/console.h>
 
@@ -238,6 +240,16 @@ void handle_generate_address(void) BANKED {
    }
 
     show_progress_page();
+
+    // perform full crc32 integrity check
+    if(!rom_verify_integrity()){
+        gotoxy(0,8);
+        printf("   Corrupted ROM!\n");
+        printf("                 \n");
+        while(1) {
+            vsync();
+        }
+    }
 
     uint8_t local_seed[64];
     uint8_t local_privkey[32];
