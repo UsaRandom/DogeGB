@@ -17,6 +17,7 @@
 #include "draw.h"
 
 #include "bitrot_rom.h"
+#include "bitrot_save.h"
 
 
 #include <gbdk/console.h>
@@ -264,6 +265,20 @@ void handle_generate_address(void) BANKED {
 
     seed_to_addresses(local_seed, local_address, local_pepeaddress, local_bellsaddress);
 
+    if(!validate_checksum(local_address) || !validate_checksum(local_pepeaddress) || !validate_checksum(local_bellsaddress)) {
+
+        #ifndef __APPLE__
+        __asm__("ei");
+        #endif
+
+        gotoxy(0,8);
+        printf("     !!FAILED!!\n");
+        printf("   Please Report!\n");
+        while(1) {
+            vsync();
+        }
+    }
+
     #ifndef __APPLE__
     __asm__("ei");
     #endif
@@ -295,6 +310,7 @@ void handle_generate_address(void) BANKED {
     #ifndef __APPLE__
     __asm__("di");
     #endif
+    
 
     get_wallet(current_slot, current_mode, &current_wallet);
 

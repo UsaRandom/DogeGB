@@ -64,6 +64,7 @@ SRC = src/main.c \
       src/crypto/hmac.c \
       src/crypto/ripemd160.c \
       src/bitrot_rom.c \
+      src/bitrot_save.c \
       build/entropy_data.c
 
 
