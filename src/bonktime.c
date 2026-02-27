@@ -20,7 +20,7 @@
 
 #include "entropy_data.h"
 
-#pragma bank 10
+#pragma bank 6
 
 #define BG_MAP_0 0x9800
 #define BG_MAP_1 0x9C00
@@ -267,7 +267,6 @@ uint8_t* bonktime(uint8_t mode) BANKED {
 
     set_bkg_palette(6, 1, progress_bar_palettes);
     set_bkg_data(TILE_BASE, progress_bar_TILE_COUNT, progress_bar_tiles);
-    
 
     set_bkg_data(243, cheems_idle_TILE_COUNT, cheems_idle_tiles);
     set_bkg_data(137, cheems_bonk_TILE_COUNT, cheems_bonk_tiles);

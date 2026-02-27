@@ -4,7 +4,7 @@
 #include <gbdk/platform.h>
 #include <gbdk/metasprites.h>
 
-#pragma bank 9
+#pragma bank 5
 
 BANKREF(arrow)
 

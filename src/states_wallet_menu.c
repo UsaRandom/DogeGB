@@ -9,6 +9,7 @@
 #include "states.h"
 #include "src/qr/qr_wrapper.h"
 #include "draw.h"
+#include "bitrot_save.h"
 
 
 
@@ -83,6 +84,15 @@ void handle_wallet_menu(void) BANKED {
 
             VBK_REG = 1; fill_bkg_rect(0, 0, 20, 3, 0); VBK_REG = 0;
             cls();
+
+            if(!validate_checksum(current_wallet.address)) {
+                gotoxy(0,8);
+                printf("   Corrupted Addr\n");
+                while(!joypad()) {vsync();}
+                current_state = STATE_WALLET_MENU;
+                return;
+            }
+
             qr_generate(current_wallet.address, 34);
             qr_render();
 

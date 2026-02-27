@@ -1,5 +1,5 @@
 // src/states_generation.c
-#pragma bank 5
+#pragma bank 4
 
 #include <gb/gb.h>
 #include <stdio.h>
@@ -15,6 +15,9 @@
 #include <bonktime.h>
 #include <wallet.h>
 #include "draw.h"
+
+#include "bitrot_rom.h"
+#include "bitrot_save.h"
 
 
 #include <gbdk/console.h>
@@ -239,6 +242,16 @@ void handle_generate_address(void) BANKED {
 
     show_progress_page();
 
+    // perform full crc32 integrity check
+    if(!rom_verify_integrity()){
+        gotoxy(0,8);
+        printf("   Corrupted ROM!\n");
+        printf("                 \n");
+        while(1) {
+            vsync();
+        }
+    }
+
     uint8_t local_seed[64];
     uint8_t local_privkey[32];
     char    local_address[35];
@@ -251,6 +264,20 @@ void handle_generate_address(void) BANKED {
     #endif
 
     seed_to_addresses(local_seed, local_address, local_pepeaddress, local_bellsaddress);
+
+    if(!validate_checksum(local_address) || !validate_checksum(local_pepeaddress) || !validate_checksum(local_bellsaddress)) {
+
+        #ifndef __APPLE__
+        __asm__("ei");
+        #endif
+
+        gotoxy(0,8);
+        printf("     !!FAILED!!\n");
+        printf("   Please Report!\n");
+        while(1) {
+            vsync();
+        }
+    }
 
     #ifndef __APPLE__
     __asm__("ei");
@@ -283,6 +310,7 @@ void handle_generate_address(void) BANKED {
     #ifndef __APPLE__
     __asm__("di");
     #endif
+    
 
     get_wallet(current_slot, current_mode, &current_wallet);
 

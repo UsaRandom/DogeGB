@@ -1,11 +1,14 @@
 #include <gb/gb.h>
 #include <gb/cgb.h>
 #include <stdio.h>
+#include <gbdk/console.h>
 
 #include "src/assets/bork.h"
 
+#include "bitrot_rom.h"
 
-#pragma bank 7
+
+#pragma bank 5
 
 static unsigned char blank_tile = 0;
 
@@ -90,8 +93,12 @@ void show_splash(
 
     fade_palette(white, palette);
 
-    for (uint8_t t = 0; t < 150; t++) {
-        vsync();
+    if(!quick_rom_verify_integrity()){
+        gotoxy(0,8);
+        printf("   Corrupted ROM!\n");
+        while(1) {
+            vsync();
+        }
     }
 
     fade_palette(palette, white);

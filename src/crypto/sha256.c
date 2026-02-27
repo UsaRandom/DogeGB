@@ -12,7 +12,7 @@
               This implementation uses little endian byte order.
 *********************************************************************/
 
-#pragma bank 5
+#pragma bank 4
 /*************************** HEADER FILES ***************************/
 #include <stdint.h>
 #include <string.h>

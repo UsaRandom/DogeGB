@@ -8,7 +8,7 @@
 #include "src/assets/progress_bar.h"
 #include <gbdk/metasprites.h>
 
-#pragma bank 10
+#pragma bank 6
 
 
 uint8_t total_progress = 0;
