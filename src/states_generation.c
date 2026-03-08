@@ -211,21 +211,6 @@ void handle_confirm_generated_words(void) BANKED {
 
 }
 
-
-void print_hex_buffer(const uint8_t* buf, uint8_t len, uint8_t bytes_per_line) {
-    for (uint8_t i = 0; i < len; i++) {
-        printf("%02x", buf[i]);
-        if ((i + 1) % bytes_per_line == 0) {
-            printf("\n");
-        } else {
-            printf(" ");
-        }
-    }
-    if (len % bytes_per_line != 0) {
-        printf("\n");
-    }
-}
-
 void wait_for_button(void) {
     while (joypad() == 0) {
         vsync();
@@ -272,7 +257,7 @@ void handle_generate_address(void) BANKED {
         #endif
 
         gotoxy(0,8);
-        printf("     !!FAILED!!\n");
+        printf("     !!FAILED!!   \n");
         printf("   Please Report!\n");
         while(1) {
             vsync();

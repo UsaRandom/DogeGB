@@ -20,14 +20,6 @@ void my_memcpy(uint8_t *dest, const uint8_t *src, int len) {
         dest[i] = src[i];
     }
 }
-void my_strcpy(char *dest, const char *src) {
-    int i = 0;
-    while (src[i]) {
-        dest[i] = src[i];
-        i++;
-    }
-    dest[i] = '\0'; 
-}
 
 int my_strlen(const char *s) {
     int len = 0;
@@ -35,18 +27,6 @@ int my_strlen(const char *s) {
     return len;
 }
 
-uint8_t simple_rand(void) {
-    static uint16_t seed = 12345;
-    seed = seed * 1103515245 + 12345;
-    return ((*((volatile uint8_t*)0xFF04) ^ seed) & 0xFF);
-}
-
-void do_sha256(const uint8_t *data, uint16_t len, uint8_t *hash) {
-    SHA256_CTX ctx;
-    sha256_init(&ctx);
-    sha256_update(&ctx, data, len);
-    sha256_final(&ctx, hash);
-}
 
 void generate_mnemonic(char words[12][9]) BANKED {
     

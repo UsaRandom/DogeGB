@@ -90,7 +90,39 @@ void seed_to_addresses(
         data[36] = path[level]         & 0xFF;
 
         hmac_sha512(I, chaincode, 32, data, 37);
+
+        uint8_t il_invalid = 0;
+        for (int j = 0; j < 32; j++) {
+            if (I[j] > SECP256K1_N[j])
+            {
+                il_invalid = 1;
+                break;
+            }
+            if (I[j] < SECP256K1_N[j])
+            {                
+                break;
+            }
+        }
+        if (il_invalid) {
+            doge_out[0] = pepe_out[0] = bells_out[0] = '\0';
+            return;
+        }
+
         bn256_add_mod_n(child_key, I, privkey);
+
+        uint8_t is_zero = 1;
+        for (int j = 0; j < 32; j++) {
+            if (child_key[j] != 0)
+            {
+                is_zero = 0;
+                break;
+            }
+        }
+        if (is_zero) {
+            doge_out[0] = pepe_out[0] = bells_out[0] = '\0';
+            return;
+        }
+
         my_memcpy(privkey, child_key, 32);
         my_memcpy(chaincode, I + 32, 32);
     }
