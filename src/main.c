@@ -41,6 +41,7 @@ uint8_t word_index;
 uint8_t test_word_indices[2];
 char temp_buffer[32];
 wallet current_wallet;
+uint8_t test_streak = 0;
 
 uint8_t current_mode = 0;
 

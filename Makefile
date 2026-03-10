@@ -26,6 +26,7 @@ SRC = src/main.c \
       src/states_bonk.c \
       src/states_generation.c \
       src/states_wallet_menu.c \
+      src/states_wordtest.c \
       src/assets/arrow.c \
       src/assets/progress_bar.c \
       src/assets/keyboard.c \
