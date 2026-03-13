@@ -126,15 +126,6 @@ void handle_show_generated_words(void) BANKED {
 }
 
 
-
-
-void wait_for_button(void) {
-    while (joypad() == 0) {
-        vsync();
-    }
-    waitpadup();
-}
-
 void handle_generate_address(void) BANKED {
     char mnemonic_str[109] = {0};
    for (uint8_t i = 0; i < 12; i++) {

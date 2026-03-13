@@ -62,7 +62,7 @@ const uint16_t INTERVAL_STEP = 10;
 uint8_t prompt_timer = 0;
 uint16_t current_interval = 0;
 
-
+extern uint16_t pool_ptr;
 extern uint8_t entropy_pool[ENTROPY_POOL_SIZE];
 
 
@@ -194,24 +194,7 @@ uint8_t get_next_target() {
 
 static uint16_t last_tick = 0;
 volatile uint8_t logic_tick = 0;
-uint16_t pool_ptr = 0;
 
-void stir_entropy(void) {
-    // Sample hardware
-    uint8_t sample = DIV_REG ^ LY_REG ^ STAT_REG;
-    
-    // Mix into current byte (simple XOR for base entropy addition)
-    entropy_pool[pool_ptr] ^= sample;
-    
-    // Nonlinear spread to next byte (addition for carry)
-    entropy_pool[(pool_ptr + 1) % ENTROPY_POOL_SIZE] += sample; 
-    
-    // Bit-shifted mix to a farther byte (e.g., +7 for some diffusion without locality)
-    entropy_pool[(pool_ptr + 7) % ENTROPY_POOL_SIZE] ^= (sample << 1); 
-    
-    // Advance pointer
-    pool_ptr = (pool_ptr + 1) % ENTROPY_POOL_SIZE;
-}
 
 void timer_isr() {
     logic_tick = 1; // Signal that it's time to update the game
@@ -325,7 +308,7 @@ uint8_t* bonktime(uint8_t mode) BANKED {
     uint8_t press_count = 0;
 
     setup_timer();
-    pool_ptr = 0;
+
     last_tick = DIV_REG | ((uint16_t)LY_REG << 8);
 
     uint8_t canceled_entropy_mode = 0;

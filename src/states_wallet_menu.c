@@ -96,7 +96,7 @@ void handle_wallet_menu(void) BANKED {
             qr_generate(current_wallet.address, 34);
             qr_render();
 
-            while(!joypad()) {vsync();}
+            while(!joypad()) {stir_entropy();}
             init_draw();
         return;
     }

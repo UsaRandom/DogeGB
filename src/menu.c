@@ -147,7 +147,7 @@ void wait_no_buttons(void) {
         update_cursor_target();
         update_cursor_animation();
         update_cursor_position();
-        vsync();
+        vsync_stir_entropy();
         if (!joypad()) timeout++;
     }
 }
@@ -180,7 +180,7 @@ int8_t menu(const char* title, const char** options, uint8_t num_options) BANKED
         }
     }
     
-    while (joypad()) vsync();
+    while (joypad()) stir_entropy();
     update_cursor_position();
     
     int8_t konami_index = 0;
@@ -220,7 +220,7 @@ int8_t menu(const char* title, const char** options, uint8_t num_options) BANKED
         update_cursor_target();
         update_cursor_animation();
         update_cursor_position();
-        vsync();
+        vsync_stir_entropy();
     }
 }
 
