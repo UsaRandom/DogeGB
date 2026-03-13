@@ -5,7 +5,7 @@ CC = ./gbdk/bin/lcc
 CFLAGS = -msm83:gb \
          -Wl-yt0x1B \
          -Wl-yo8 \
-         -Wl-ya4 \
+         -Wl-ya1 \
          -Wb-ext=.rel \
          -Wm-yC \
          -I. \
@@ -18,7 +18,7 @@ CFLAGS = -msm83:gb \
 OPTFLAGS = # -Wf--opt-code-speed \
            #-Wf--max-allocs-per-node1000
 
-# Source files - one per line for easy editing!
+# Source files
 SRC = src/main.c \
       src/qr/qrcodegen.c \
       src/qr/qr_wrapper.c \

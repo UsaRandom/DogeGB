@@ -1,14 +1,14 @@
 #include <gb/gb.h>
 #include <stdint.h>
 #include <string.h>
-#include "wallet.h"       // contains wallet struct + PEPEBG/BELLSGB defines
+#include "wallet.h"
 #include "wallet_sram.h"
 
 uint8_t has_valid_save(void) {
     uint8_t valid = FALSE;
     ENABLE_RAM_MBC5;
     SWITCH_RAM_MBC5(0);
-    if (save_magic1 == MAGIC1 && save_magic2 == MAGIC2) {
+    if (save_magic == MAGIC) {
         valid = TRUE;
     }
     DISABLE_RAM_MBC5;
@@ -38,8 +38,7 @@ void save_wallet(uint8_t slot,
     slots[idx].bellsaddress[ADDRESS_MAX_LEN] = '\0';
     slots[idx].mnemonic[MNEMONIC_MAX_LEN]    = '\0';
 
-    save_magic1 = MAGIC1;
-    save_magic2 = MAGIC2;
+    save_magic = MAGIC;
 
     DISABLE_RAM_MBC5;
 }
@@ -70,13 +69,11 @@ void get_wallet(uint8_t slot, uint8_t mode, wallet *out) {
     }
     temp_addr[ADDRESS_MAX_LEN] = '\0';
 
-    uint16_t magic1 = save_magic1;
-    uint16_t magic2 = save_magic2;
+    uint64_t magic = save_magic;
     DISABLE_RAM_MBC5;
 
     if (used_flag != SLOT_USED_MARKER ||
-        magic1 != MAGIC1 ||
-        magic2 != MAGIC2 ||
+        magic != MAGIC ||
         temp_addr[0] == '\0') {
         out->slotNum = 255u;
         out->address[0] = '\0';

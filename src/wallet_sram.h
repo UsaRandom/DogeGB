@@ -6,11 +6,10 @@
 #define MAX_SLOTS          8u
 #define ADDRESS_MAX_LEN    35
 #define MNEMONIC_MAX_LEN   108
-#define SLOT_DISPLAY_LEN   16   // adjust if your list_slots call uses a different size
+#define SLOT_DISPLAY_LEN   16
 
 #define SLOT_USED_MARKER   1u
-#define MAGIC1             0x4F44u
-#define MAGIC2             0x4547u
+#define MAGIC              0x4E494F4345474F44ull //DOGECOIN
 
 typedef struct {
     uint16_t used;
@@ -20,8 +19,8 @@ typedef struct {
     char     mnemonic[MNEMONIC_MAX_LEN + 1];
 } SaveSlot;
 
-extern uint16_t save_magic1;
-extern uint16_t save_magic2;
+extern uint64_t save_magic;
+extern uint8_t pass_double_hash[32];
 extern SaveSlot slots[MAX_SLOTS];
 
 #endif
