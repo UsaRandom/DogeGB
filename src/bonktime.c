@@ -46,10 +46,13 @@
 #define TARGET_RIGHT 5
 
 #define TARGET_NULL 6
-#define NUMBER_OF_PRESSES 72
 
 
 uint8_t _progress = 0;
+uint8_t progress_per_button = 2;
+uint8_t entropy_mode_required_presses = 72;
+
+
 uint8_t bonk_current_state = STATE_IDLE;
 uint8_t target_button = TARGET_A;
 uint8_t anim_timer = 0;
@@ -218,6 +221,22 @@ void add_entropy(uint8_t keys) {
     pool_ptr = (pool_ptr + 1) % ENTROPY_POOL_SIZE;
 }
 
+void print_str(uint8_t line, const char* str) {
+    unsigned char tiles[20];
+    for (uint8_t i = 0; i < strlen(str); i++) {
+        char c = str[i];
+        tiles[i] = c - 32;
+        if(c == ' '){
+            tiles[i] = 137;
+        }
+        if(c == '!'){
+            tiles[i] = 72;
+        } 
+    }
+    set_bkg_tiles(0, line, strlen(str), 1, tiles);
+}
+
+
 // --- MAIN FUNCTION ---
 uint8_t* bonktime(uint8_t mode) BANKED {
 
@@ -273,21 +292,7 @@ uint8_t* bonktime(uint8_t mode) BANKED {
         set_bkg_palette(0, 1, gb_palette);
     }
 
-    unsigned char tiles[20];
-    const char* title = "     Bonk Time!";
-    for (uint8_t i = 0; i < strlen(title); i++) {
-        char c = title[i];
-        tiles[i] = c - 32;
-        if(c == ' '){
-            tiles[i] = 137;
-        }
-        if(c == '!'){
-            tiles[i] = 72; //'!' is moved to where 'h' is 
-        } 
-    }
-
-    set_bkg_tiles(0, 1, strlen(title), 1, tiles);
-    
+    print_str(1, "     Bonk Time!");
 
     _progress = 0;
     update();
@@ -308,10 +313,20 @@ uint8_t* bonktime(uint8_t mode) BANKED {
     uint8_t press_count = 0;
 
     setup_timer();
+    
+    while (joypad()) { stir_entropy(); }
 
     last_tick = DIV_REG | ((uint16_t)LY_REG << 8);
 
     uint8_t canceled_entropy_mode = 0;
+
+    uint8_t ly_min = 255u;
+    uint8_t ly_max = 0u;
+    uint8_t ly_buckets[10] = {0};  // 153/16 ≈ 9.5 buckets
+    memset(ly_buckets, 0, sizeof(ly_buckets));
+
+    uint8_t fq_previous_keys = joypad();
+    uint16_t fq_press_count = 0;
 
     while(1) {
         
@@ -321,9 +336,44 @@ uint8_t* bonktime(uint8_t mode) BANKED {
 
         stir_entropy();
 
+        uint8_t keys = joypad();
+
+        if(fq_press_count < 32 && keys && !fq_previous_keys && mode == BONKTIME_ENTROPY_MODE) {
+            fq_press_count++;
+
+            uint8_t ly = LY_REG;
+            if (ly < ly_min) ly_min = ly;
+            if (ly > ly_max) ly_max = ly;
+
+            uint8_t bucket = ly >> 4;
+            if (bucket < 10 && ly_buckets[bucket] == 0) {
+                ly_buckets[bucket] = 1;
+            }
+            if (fq_press_count == 32) {
+                uint8_t unique = 0;
+                for (uint8_t b = 0; b < 10; b++) if (ly_buckets[b]) unique++;
+
+                if ((ly_max - ly_min <= 42u) || unique <= 6u) {
+                
+                    //Input Quantization
+                    //This is a low-entropy problem on certain emulators
+                    //where inputs are only registered on certain scanlines (VBLANK, etc).
+                    //
+                    //We increase play time to account for this.
+                    progress_per_button = 1;
+                    entropy_mode_required_presses = 144;
+                    _progress = press_count;
+
+                    print_str(4, "      EMULATOR");
+                    print_str(5, "      DETECTED");
+                    update();
+                }                
+            }
+        }
+        fq_previous_keys = keys;
+
         if(logic_tick) {
             logic_tick = 0;
-            uint8_t keys = joypad();
             
             // Always tick the prompt timer when in idle (waiting for input)
             if (bonk_current_state == STATE_IDLE) {
@@ -381,8 +431,8 @@ uint8_t* bonktime(uint8_t mode) BANKED {
 
                         if(mode == BONKTIME_ENTROPY_MODE) {
                             seed_acc ^= DIV_REG; 
-                            _progress += 2;
-                            if (press_count < NUMBER_OF_PRESSES) {
+                            _progress += progress_per_button;
+                            if (press_count < entropy_mode_required_presses) {
                                 add_entropy(keys);
                                 press_count++;
                             }
@@ -415,8 +465,8 @@ uint8_t* bonktime(uint8_t mode) BANKED {
                         if(mode == BONKTIME_ENTROPY_MODE) {
                             // In entropy collection mode, each bonk adds entropy and progresses
                             seed_acc ^= DIV_REG; // Mix in current DIV_REG value
-                            _progress += 2;
-                            if (press_count < NUMBER_OF_PRESSES) {
+                            _progress += progress_per_button;
+                            if (press_count < entropy_mode_required_presses) {
                                 add_entropy(keys);
                                 press_count++;
                             }
