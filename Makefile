@@ -64,24 +64,20 @@ SRC = src/main.c \
       src/crypto/secp256k1.c \
       src/crypto/hmac.c \
       src/crypto/ripemd160.c \
+      src/crypto/entropy_data.c \
       src/bitrot_rom.c \
-      src/bitrot_save.c \
-      build/entropy_data.c
+      src/bitrot_save.c
 
+.PHONY: entropy test clean postclean assets savedata
 
 .DEFAULT_GOAL := all
 
-# Generate entropy pool with random data
-.entropy:
-	./generate_entropy.sh
-
-# Asset conversion parameters
 bank = 6
 
-.savedata:
+savedata:
 	$(CC) -Wf-ba0 -c -o build/wallet_sram.o src/wallet_sram.c
 
-.assets:
+assets:
 	./gbdk/bin/png2asset ./raw_assets/cheems_idle.png -map -noflip -tile_origin 243 -b $(bank) -o ./src/assets/cheems_idle.c
 	./gbdk/bin/png2asset ./raw_assets/cheems_bonk.png -map -noflip -tile_origin 137 -b $(bank) -o ./src/assets/cheems_bonk.c
 	./gbdk/bin/png2asset ./raw_assets/cheems_selfbonk.png -map -noflip -tile_origin 202 -b $(bank) -o ./src/assets/cheems_selfbonk.c
@@ -97,20 +93,24 @@ bank = 6
 	./gbdk/bin/png2asset ./raw_assets/bellscoin.png -tile_origin 202 -b 1 -o ./src/assets/bellscoin.c
 	./gbdk/bin/png2asset ./raw_assets/dogecoin.png -tile_origin 202 -b 1 -o ./src/assets/dogecoin.c
 
-#put the test 
-.test:
-	python3 tools/generate_entropy.py
+
+test:
 	cd test && make
 	python3 test/test_crypto.py 100
 
-.clean:
+
+entropy:
+	python3 tools/generate_entropy.py
+
+
+clean:
 	rm -f $(PROJECT_NAME).gb *.map *.sym *.noi *.ihx *.lk *.adb
 
-.postclean:
-	rm build/*.c build/*.h build/*.asm build/*.lst build/*.o build/*.sym
+postclean:
+	rm build/*.asm build/*.lst build/*.o build/*.sym
 
 build/$(PROJECT_NAME).gb: $(SRC) build/wallet_sram.o
 	$(CC) $(CFLAGS) $(OPTFLAGS) -o $@ $^
 	python3 tools/patch_bitrot.py $@
 
-all: .clean .test .assets .savedata build/$(PROJECT_NAME).gb .postclean
+all: clean test assets savedata build/$(PROJECT_NAME).gb postclean

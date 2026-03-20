@@ -328,17 +328,17 @@ uint8_t* bonktime(uint8_t mode) BANKED {
     uint8_t fq_previous_keys = joypad();
     uint16_t fq_press_count = 0;
 
+    uint8_t keys = 0;
+
     while(1) {
-        
-        // Stir the pot every single frame, even if no button is pressed
         seed_acc ^= DIV_REG;
         seed_acc ^= LY_REG;
 
         stir_entropy();
 
-        uint8_t keys = joypad();
+        keys = joypad();
 
-        if(fq_press_count < 32 && keys && !fq_previous_keys && mode == BONKTIME_ENTROPY_MODE) {
+        if(keys && !fq_previous_keys && fq_press_count < 32 && mode == BONKTIME_ENTROPY_MODE) {
             fq_press_count++;
 
             uint8_t ly = LY_REG;

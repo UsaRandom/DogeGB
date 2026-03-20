@@ -12,7 +12,7 @@ import textwrap
 
 ENTROPY_POOL_SIZE = 512
 SALT_SIZE = 128
-OUTPUT_DIR = "build"
+OUTPUT_DIR = "src/crypto"
 
 HEADER_FILE = "entropy_data.h"
 C_FILE = "entropy_data.c"
