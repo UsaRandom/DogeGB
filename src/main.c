@@ -68,6 +68,7 @@ extern void handle_generate_address(void) BANKED;
 extern void handle_save_wallet(void) BANKED;
 extern void handle_wallet_menu(void) BANKED;
 extern void handle_bonktime_entropy(void) BANKED;
+extern void handle_test_menu(void) BANKED;
 
 extern uint8_t entropy_pool[ENTROPY_POOL_SIZE];
 
@@ -156,6 +157,9 @@ void main(void)
                 handle_wallet_menu();
                 break;
 
+            case STATE_TESTING:
+                handle_test_menu();
+                break;
 
             case STATE_IDLE:
             default:

@@ -27,8 +27,9 @@ void handle_slot_selection(void) {
     char slot_display[MAX_SLOTS][SLOT_DISPLAY_LEN];
 
     list_slots(current_mode, slot_display);
+
     
-    const char* menu_options[MAX_SLOTS + 2] = {
+    const char* menu_options[MAX_SLOTS + 4] = {
         slot_display[0],
         slot_display[1],
         slot_display[2],
@@ -38,7 +39,9 @@ void handle_slot_selection(void) {
         slot_display[6],
         slot_display[7],
         "",
-        current_mode == DOGEGB || current_mode == BELLSGB ? "[BONK TIME!]" : "[PEPE SAYS!]"
+        current_mode == DOGEGB || current_mode == BELLSGB ? "[BONK TIME!]" : "[PEPE SAYS!]",
+        "[Run Tests]",
+        "[Set PIN]"
     };
 
 
@@ -59,7 +62,7 @@ void handle_slot_selection(void) {
     }
     
 
-    int8_t slot = show_menu(title, menu_options, MAX_SLOTS + 2);
+    int8_t slot = show_menu(title, menu_options, MAX_SLOTS + 4);
     if (slot >= 0 && slot < MAX_SLOTS) {
         current_slot = slot + 1;
 
@@ -76,6 +79,23 @@ void handle_slot_selection(void) {
     }
     if(slot == MAX_SLOTS + 1) {
         current_state = STATE_BONKTIME_GAME;
+    }
+
+    if(slot == MAX_SLOTS + 2) {
+
+        char* yesNo[] = {
+            "No",
+            "Yes"
+        };
+
+        int8_t answer = show_menu("Run Tests?", yesNo, 2);
+
+        if(answer == 1) {
+            current_state = STATE_TESTING;
+        }
+    }
+    if(slot == MAX_SLOTS + 3) {
+        current_state = STATE_SET_PIN;
     }
 
     if(slot == -2){
