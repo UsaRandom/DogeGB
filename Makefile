@@ -101,6 +101,7 @@ SRC = src/main.c \
 bank = 6
 
 savedata:
+	mkdir -p build
 	$(CC) -Wf-ba0 -c -o build/wallet_sram.o src/wallet_sram.c
 
 assets:
