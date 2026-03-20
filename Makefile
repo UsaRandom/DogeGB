@@ -98,6 +98,7 @@ assets:
 	./gbdk/bin/png2asset ./raw_assets/pepecoin.png -tile_origin 202 -b 1 -o ./src/assets/pepecoin.c
 	./gbdk/bin/png2asset ./raw_assets/bellscoin.png -tile_origin 202 -b 1 -o ./src/assets/bellscoin.c
 	./gbdk/bin/png2asset ./raw_assets/dogecoin.png -tile_origin 202 -b 1 -o ./src/assets/dogecoin.c
+	./gbdk/bin/png2asset ./raw_assets/bork.png -use_map_attributes -map -noflip -tile_origin 0 -b 5 -o ./src/assets/bork.c
 
 
 test:
