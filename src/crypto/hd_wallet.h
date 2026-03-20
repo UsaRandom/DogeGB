@@ -8,7 +8,9 @@ void seed_to_addresses(
     const uint8_t *seed,
     char *doge_out,
     char *pepe_out,
-    char *bells_out
+    char *bells_out,
+    uint8_t privkey_out[32],
+    uint8_t pubkey_out[33]
 ) BANKED;
 
 #endif

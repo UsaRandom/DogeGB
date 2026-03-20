@@ -59,7 +59,9 @@ void seed_to_addresses(
     const uint8_t *seed,
     char *doge_out,
     char *pepe_out,
-    char *bells_out
+    char *bells_out,
+    uint8_t privkey_out[32],
+    uint8_t pubkey_out[33]
 ) BANKED {
     uint8_t privkey[32];
     uint8_t chaincode[32];
@@ -129,6 +131,9 @@ void seed_to_addresses(
 
     uint8_t compressed_pub[33];
     secp256k1_pubkey(privkey, compressed_pub);
+
+    my_memcpy(privkey_out, privkey, 32);
+    my_memcpy(pubkey_out, compressed_pub, 33);
 
     SHA256_CTX ctx;
     uint8_t sha_hash[32];

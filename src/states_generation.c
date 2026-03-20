@@ -147,6 +147,7 @@ void handle_generate_address(void) BANKED {
 
     uint8_t local_seed[64];
     uint8_t local_privkey[32];
+    uint8_t local_pubkey[33];
     char    local_address[35];// = "DNQAyz6kPHUedoxpaUdHeXWPhgLa8bAFX4";
     char    local_pepeaddress[35];// = "PqBraorEqyXRu5b5DPHaFnar4o36fuBBVY";
     char    local_bellsaddress[35];// = "BMiA4ScJqPAGYeGPTNxhDu9TZA3rcdG7wg";
@@ -157,7 +158,7 @@ void handle_generate_address(void) BANKED {
     __asm__("di");
     #endif
 
-    seed_to_addresses(local_seed, local_address, local_pepeaddress, local_bellsaddress);
+    seed_to_addresses(local_seed, local_address, local_pepeaddress, local_bellsaddress, local_privkey, local_pubkey);
 
     if(!validate_checksum(local_address) || !validate_checksum(local_pepeaddress) || !validate_checksum(local_bellsaddress)) {
 
@@ -195,7 +196,7 @@ void handle_generate_address(void) BANKED {
     __asm__("di");
     #endif
 
-    save_wallet(current_slot, local_address, local_pepeaddress, local_bellsaddress, mnemonic_str);
+    save_wallet(current_slot, local_address, local_pepeaddress, local_bellsaddress, mnemonic_str, local_privkey, local_pubkey);
 
     #ifndef __APPLE__
     __asm__("ei");

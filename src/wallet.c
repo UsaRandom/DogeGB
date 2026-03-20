@@ -19,7 +19,9 @@ void save_wallet(uint8_t slot,
                  const char* address,
                  const char* pepeaddress,
                  const char* bellsaddress,
-                 const char* mnemonic) {
+                 const char* mnemonic,
+                 const uint8_t privkey[32],
+                 const uint8_t pubkey[33]) {
     if (slot < 1 || slot > MAX_SLOTS) return;
     uint8_t idx = slot - 1;
 
@@ -32,6 +34,8 @@ void save_wallet(uint8_t slot,
     strncpy(slots[idx].pepeaddress,  pepeaddress,  ADDRESS_MAX_LEN);
     strncpy(slots[idx].bellsaddress, bellsaddress, ADDRESS_MAX_LEN);
     strncpy(slots[idx].mnemonic,     mnemonic,     MNEMONIC_MAX_LEN);
+    memcpy(slots[idx].private_key, privkey, 32);
+    memcpy(slots[idx].public_key,  pubkey, 33);
 
     slots[idx].address[ADDRESS_MAX_LEN]      = '\0';
     slots[idx].pepeaddress[ADDRESS_MAX_LEN]  = '\0';
