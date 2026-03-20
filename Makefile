@@ -1,6 +1,27 @@
 PROJECT_NAME = DogeGB
 CC = ./gbdk/bin/lcc
 
+MODE ?= Doge
+
+LOWER_MODE := $(shell echo $(MODE) | tr A-Z a-z)
+
+DEFAULT_MODE := 0
+
+ifeq ($(findstring doge,$(LOWER_MODE)),doge)
+  CANONICAL_MODE := Doge
+else ifeq ($(findstring pepe,$(LOWER_MODE)),pepe)
+  CANONICAL_MODE := Pepe
+  DEFAULT_MODE := 2
+else ifeq ($(findstring bells,$(LOWER_MODE)),bells)
+  CANONICAL_MODE := Bells
+  DEFAULT_MODE := 1
+else
+  CANONICAL_MODE := Doge
+  $(warning Unknown MODE='$(MODE)' → using Doge)
+endif
+
+CANONICAL_MODE_UPPER := $(shell echo $(CANONICAL_MODE) | tr a-z A-Z)
+
 # Compiler flags
 CFLAGS = -msm83:gb \
          -Wl-yt0x1B \
@@ -12,7 +33,8 @@ CFLAGS = -msm83:gb \
          -Ibuild \
          -Isrc/crypto \
          -Iqr \
-         -Isrc
+         -Isrc \
+         -DDEFAULT_MODE=$(DEFAULT_MODE)
 
 # Optimization flags (passed via -Wf)
 OPTFLAGS = # -Wf--opt-code-speed \
@@ -32,6 +54,7 @@ SRC = src/main.c \
       src/assets/keyboard.c \
       src/assets/keyboard_lightgrey.c \
       src/assets/bork.c \
+      src/assets/pepelogo.c \
       src/assets/cheems_idle.c \
       src/assets/cheems_bonk.c \
       src/assets/cheems_selfbonk.c \
@@ -98,7 +121,8 @@ assets:
 	./gbdk/bin/png2asset ./raw_assets/pepecoin.png -tile_origin 202 -b 1 -o ./src/assets/pepecoin.c
 	./gbdk/bin/png2asset ./raw_assets/bellscoin.png -tile_origin 202 -b 1 -o ./src/assets/bellscoin.c
 	./gbdk/bin/png2asset ./raw_assets/dogecoin.png -tile_origin 202 -b 1 -o ./src/assets/dogecoin.c
-	./gbdk/bin/png2asset ./raw_assets/bork.png -use_map_attributes -map -noflip -tile_origin 0 -b 5 -o ./src/assets/bork.c
+	./gbdk/bin/png2asset ./raw_assets/bork.png -use_map_attributes -map -noflip -tile_origin 0 -b 7 -o ./src/assets/bork.c
+	./gbdk/bin/png2asset ./raw_assets/pepelogo.png -use_map_attributes -map -noflip -tile_origin 0 -b 7 -o ./src/assets/pepelogo.c
 
 
 test:
@@ -111,13 +135,13 @@ entropy:
 
 
 clean:
-	rm -f $(PROJECT_NAME).gb *.map *.sym *.noi *.ihx *.lk *.adb
+	rm -f $(CANONICAL_MODE)GB.gb *.map *.sym *.noi *.ihx *.lk *.adb
 
 postclean:
 	rm build/*.asm build/*.lst build/*.o build/*.sym
 
-build/$(PROJECT_NAME).gb: $(SRC) build/wallet_sram.o
+build/$(CANONICAL_MODE)GB.gb: $(SRC) build/wallet_sram.o
 	$(CC) $(CFLAGS) $(OPTFLAGS) -o $@ $^
 	python3 tools/patch_bitrot.py $@
 
-all: clean test assets savedata build/$(PROJECT_NAME).gb postclean
+all: clean test assets savedata build/$(CANONICAL_MODE)GB.gb postclean

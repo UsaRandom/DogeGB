@@ -1,6 +1,6 @@
 # DogeGB
 
-Game Boy's Cold Storage Wallet for Dogecoin!
+Game Boy's Cold Storage Wallet for Dogecoin, Pepecoin, and Bellscoin!
 
 
 https://github.com/user-attachments/assets/fb31d778-f8cc-49e6-b118-f0ea7d067f48
@@ -9,18 +9,33 @@ https://github.com/user-attachments/assets/fb31d778-f8cc-49e6-b118-f0ea7d067f48
 
 ## Building
 
-Requires GBDK (Game Boy Development Kit):
-- Download from: [https://gbdk-2020.github.io/gbdk-binaries/](https://github.com/gbdk-2020/gbdk-2020)
-- Extract to project root as `gbdk/` folder
+Requirements:
+- Python3
+- GBDK (Game Boy Development Kit):
+    - Download from: [https://gbdk-2020.github.io/gbdk-binaries/](https://github.com/gbdk-2020/gbdk-2020)
+    - Extract to project root as `gbdk/` folder
 
-Then:
+To build `DogeGB.gb`
 ```bash
 make
 ```
 
-## Unique Builds
+The default coin mode on startup is Dogecoin, but the app can be built to default to Pepecoin or Bellscoin instead by using the `MODE` flag on build.
 
-You can inject new entropy into DogeGB by running:
+To build `PepeGB.gb`
+```bash
+make MODE=Pepe
+```
+
+To Build `BellsGB.gb`
+```bash
+make MODE=Bells
+```
+
+
+## Unique Build-Time Entropy
+
+If you are concerned about runtime entropy generation being insufficient, you can add build-time entropy yourself by running:
 
 ```bash
 make entropy && make
@@ -48,8 +63,8 @@ Creates a corrupted rom (flips random bit) to verify ROM integrity checks work.
 ## Features
 
 - Generate BIP39 mnemonic phrases
-- Create Dogecoin wallet addresses
-- Built-in entropy generation via "Bonk Time" game
+- Create Dogecoin, Pepecoin, & Bellscoin wallet addresses
+- Built-in entropy generation via Minigame
 - QR address display
 - Air-gapped operation
 - ROM integrity verification
@@ -73,9 +88,6 @@ That means:
 - Keep cameras away from the screen
 - For Flash Cartridges, use a dedicated SD Card that never gets plugged into a computer again!
 
-### Hardware Specific Issues
-
-Certain Game Boy emulators, like GameYob for DS, have low button input timing resolution. Bonk Time! will automatically detect this and adjust playtime to account for low entropy generation. You will see an 'EMULATOR DETECTED' message if this happens.
 
 
 

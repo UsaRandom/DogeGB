@@ -44,7 +44,13 @@ wallet current_wallet;
 uint8_t test_streak = 0;
 
 uint16_t pool_ptr = 0;
-uint8_t current_mode = 0;
+
+// Determines which coin mode to start in. Set by MODE at compile time.
+#ifndef DEFAULT_MODE
+#define DEFAULT_MODE 0
+#endif
+
+uint8_t current_mode = DEFAULT_MODE;
 
 char menu_strings[16][16];
 const char* menu_options[16];
@@ -92,7 +98,19 @@ void main(void)
         cpu_fast();
     }
 
-    show_doge_splash();
+    switch(current_mode) {
+        case DOGEGB:
+            show_doge_splash();
+            break;
+        case PEPEGB:
+            show_pepe_splash();
+            break;
+        case BELLSGB:
+            show_doge_splash();
+            break;
+        default:
+        break;
+    }
     init_draw();
     SHOW_BKG;
     DISPLAY_ON;

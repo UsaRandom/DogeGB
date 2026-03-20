@@ -4,11 +4,12 @@
 #include <gbdk/console.h>
 
 #include "src/assets/bork.h"
+#include "src/assets/pepelogo.h"
 
 #include "bitrot_rom.h"
 
 
-#pragma bank 5
+#pragma bank 7
 
 static unsigned char blank_tile = 0;
 
@@ -65,62 +66,72 @@ void fade_palette(const palette_color_t* start_pal, const palette_color_t* targe
 }
 
 void show_splash(
-    uint16_t tile_origin,           
-    const uint8_t* tiles,           
-    uint16_t tile_count,            
-    const uint8_t* map,             
-    uint8_t map_width,             
-    uint8_t map_height,            
-    const palette_color_t* palette 
-) BANKED {
+    uint16_t tile_origin,
+    const uint8_t* tiles,
+    uint16_t tile_count,
+    const uint8_t* map,
+    uint8_t map_width,
+    uint8_t map_height,
+    const palette_color_t* palette
+)  {  
     DISPLAY_OFF;
     HIDE_SPRITES;
     SHOW_BKG;
-
-
     fill_bkg_rect(0, 0, 20, 18, blank_tile);
     VBK_REG = 1;
     fill_bkg_rect(0, 0, 20, 18, 0);
     VBK_REG = 0;
 
     set_bkg_palette(0, 1, white);
-    set_bkg_data(tile_origin, tile_count, tiles);
 
-    uint8_t start_x = (20 - map_width)  / 2;
+    set_bkg_data(tile_origin, tile_count, tiles);
+    uint8_t start_x = (20 - map_width) / 2;
     uint8_t start_y = (18 - map_height) / 2;
     set_bkg_tiles(start_x, start_y, map_width, map_height, map);
+
+    palette_color_t asset_palette[4];
+    for (uint8_t i = 0; i < 4; i++) {
+        asset_palette[i] = palette[i];
+    }
+    
     DISPLAY_ON;
+    fade_palette(white, asset_palette);
 
-    fade_palette(white, palette);
-
-    if(!quick_rom_verify_integrity()){
-        gotoxy(0,8);
-        printf("   Corrupted ROM!\n");
-        while(1) {
-            vsync();
-        }
+    if (!quick_rom_verify_integrity()) {
+        gotoxy(0, 8);
+        printf(" Corrupted ROM!\n");
+        while (1) vsync();
     }
 
-    fade_palette(palette, white);
+    fade_palette(asset_palette, white);
 
     for (uint8_t y = 0; y < 18; y++) {
         for (uint8_t x = 0; x < 20; x++) {
             set_bkg_tiles(x, y, 1, 1, &blank_tile);
         }
     }
-
-
-    if(_cpu != CGB_TYPE){
+    if (_cpu != CGB_TYPE) {
         BGP_REG = 0xE4;
         OBP0_REG = 0xE4;
         OBP1_REG = 0xE4;
     }
+}
 
+void show_pepe_splash(void) BANKED {
+    show_splash(
+        pepelogo_TILE_ORIGIN,
+        pepelogo_tiles,
+        pepelogo_TILE_COUNT,
+        pepelogo_map,
+        pepelogo_MAP_ATTRIBUTES_WIDTH,
+        pepelogo_MAP_ATTRIBUTES_HEIGHT,
+        pepelogo_palettes
+    );
 }
 
 void show_doge_splash(void) BANKED {
     show_splash(
-        bork_TILE_ORIGIN,                      
+        bork_TILE_ORIGIN,
         bork_tiles,
         bork_TILE_COUNT,
         bork_map,

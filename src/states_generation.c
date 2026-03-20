@@ -154,7 +154,7 @@ void handle_generate_address(void) BANKED {
 
     mnemonic_to_seed(mnemonic_str, local_seed);
 
-    #ifndef __APPLE__
+    #ifndef TEST_MODE
     __asm__("di");
     #endif
 
@@ -162,7 +162,7 @@ void handle_generate_address(void) BANKED {
 
     if(!validate_checksum(local_address) || !validate_checksum(local_pepeaddress) || !validate_checksum(local_bellsaddress)) {
 
-        #ifndef __APPLE__
+        #ifndef TEST_MODE
         __asm__("ei");
         #endif
 
@@ -174,7 +174,7 @@ void handle_generate_address(void) BANKED {
         }
     }
 
-    #ifndef __APPLE__
+    #ifndef TEST_MODE
     __asm__("ei");
     #endif
 
@@ -192,24 +192,24 @@ void handle_generate_address(void) BANKED {
         break;
     }
 
-    #ifndef __APPLE__
+    #ifndef TEST_MODE
     __asm__("di");
     #endif
 
     save_wallet(current_slot, local_address, local_pepeaddress, local_bellsaddress, mnemonic_str, local_privkey, local_pubkey);
 
-    #ifndef __APPLE__
+    #ifndef TEST_MODE
     __asm__("ei");
     #endif
 
-    #ifndef __APPLE__
+    #ifndef TEST_MODE
     __asm__("di");
     #endif
     
 
     get_wallet(current_slot, current_mode, &current_wallet);
 
-    #ifndef __APPLE__
+    #ifndef TEST_MODE
     __asm__("ei");
     #endif
 

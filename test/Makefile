@@ -1,5 +1,5 @@
 CC = gcc
-CFLAGS = -I. -I.. -I../build -std=c99 -w
+CFLAGS = -I. -I.. -I../build -std=c99 -w -DTEST_MODE
 
 # All crypto source files
 CRYPTO_SRC = ../src/crypto/mnemonic.c ../src/crypto/hd_wallet.c ../src/crypto/pbkdf2.c \
