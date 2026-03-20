@@ -64,7 +64,7 @@ void get_wallet(uint8_t slot, uint8_t mode, wallet *out) {
     strncpy(temp_mn, slots[idx].mnemonic, MNEMONIC_MAX_LEN);
     temp_mn[MNEMONIC_MAX_LEN] = '\0';
 
-    if (mode == PEPEBG) {
+    if (mode == PEPEGB) {
         strncpy(temp_addr, slots[idx].pepeaddress, ADDRESS_MAX_LEN);
     } else if (mode == BELLSGB) {
         strncpy(temp_addr, slots[idx].bellsaddress, ADDRESS_MAX_LEN);

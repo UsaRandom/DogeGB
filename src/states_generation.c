@@ -182,7 +182,7 @@ void handle_generate_address(void) BANKED {
         case DOGEGB:
             strcpy(address, local_address);
         break;
-        case PEPEBG:
+        case PEPEGB:
             strcpy(address, local_pepeaddress);
             break;
         case BELLSGB:

@@ -40,7 +40,7 @@ void init_cursor_sprite(void) {
             set_sprite_data(0, dogecoin_TILE_COUNT, dogecoin_tiles);
             set_sprite_palette(0, dogecoin_PALETTE_COUNT * dogecoin_COLORS_PER_PALETTE, dogecoin_palettes);
             break;
-        case PEPEBG:
+        case PEPEGB:
             set_sprite_data(0, pepecoin_TILE_COUNT, pepecoin_tiles);
             set_sprite_palette(0, pepecoin_PALETTE_COUNT * pepecoin_COLORS_PER_PALETTE, pepecoin_palettes);
             break;

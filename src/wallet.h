@@ -9,7 +9,7 @@
 enum WALLET_MODE {
     DOGEGB,
     BELLSGB,
-    PEPEBG
+    PEPEGB
 };
 
 typedef struct {

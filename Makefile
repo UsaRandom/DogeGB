@@ -4,7 +4,7 @@ CC = ./gbdk/bin/lcc
 # Compiler flags
 CFLAGS = -msm83:gb \
          -Wl-yt0x1B \
-         -Wl-yo8 \
+         -Wl-yo16 \
          -Wl-ya1 \
          -Wb-ext=.rel \
          -Wm-yC \
@@ -35,6 +35,9 @@ SRC = src/main.c \
       src/assets/cheems_idle.c \
       src/assets/cheems_bonk.c \
       src/assets/cheems_selfbonk.c \
+      src/assets/pepe_idle.c \
+      src/assets/pepe_bonk.c \
+      src/assets/pepe_selfbonk.c \
       src/assets/abutton.c \
       src/assets/bbutton.c \
       src/assets/dpadbutton_up.c \
@@ -78,6 +81,9 @@ savedata:
 	$(CC) -Wf-ba0 -c -o build/wallet_sram.o src/wallet_sram.c
 
 assets:
+	./gbdk/bin/png2asset ./raw_assets/pepe_idle.png -map -noflip -tile_origin 243 -b $(bank) -o ./src/assets/pepe_idle.c
+	./gbdk/bin/png2asset ./raw_assets/pepe_bonk.png -map -noflip -tile_origin 137 -b $(bank) -o ./src/assets/pepe_bonk.c
+	./gbdk/bin/png2asset ./raw_assets/pepe_selfbonk.png -map -noflip -tile_origin 202 -b $(bank) -o ./src/assets/pepe_selfbonk.c
 	./gbdk/bin/png2asset ./raw_assets/cheems_idle.png -map -noflip -tile_origin 243 -b $(bank) -o ./src/assets/cheems_idle.c
 	./gbdk/bin/png2asset ./raw_assets/cheems_bonk.png -map -noflip -tile_origin 137 -b $(bank) -o ./src/assets/cheems_bonk.c
 	./gbdk/bin/png2asset ./raw_assets/cheems_selfbonk.png -map -noflip -tile_origin 202 -b $(bank) -o ./src/assets/cheems_selfbonk.c

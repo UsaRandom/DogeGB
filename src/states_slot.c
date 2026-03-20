@@ -38,7 +38,7 @@ void handle_slot_selection(void) {
         slot_display[6],
         slot_display[7],
         "",
-        "[Bonk Time!]"
+        current_mode == DOGEGB || current_mode == BELLSGB ? "[BONK TIME!]" : "[PEPE SAYS!]"
     };
 
 
@@ -51,7 +51,7 @@ void handle_slot_selection(void) {
         case BELLSGB:
             title = bellsGBTitle;
             break;
-        case PEPEBG:
+        case PEPEGB:
             title = pepeGBTitle;
             break;
         default:

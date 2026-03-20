@@ -230,7 +230,7 @@ char* get_word_from_user(int wordNumber, const char* start) BANKED {
         case DOGEGB:
             sel = 12;
             break;
-        case PEPEBG:
+        case PEPEGB:
             sel = 9;
             break;
         case BELLSGB:
