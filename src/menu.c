@@ -8,8 +8,13 @@
 #include "src/assets/dogecoin.h" 
 #include "src/assets/pepecoin.h" 
 #include "src/assets/bellscoin.h" 
+#include "src/assets/chksum.h"
+#include "bip39_wordlist.h"
 #include <draw.h>
 #include <wallet.h>
+#include "menu.h"
+
+
 #pragma bank 1
 
 uint8_t cursor_pos = 0;
@@ -17,6 +22,8 @@ uint8_t target_pos = 0;
 int8_t current_y_offset = 0;
 uint8_t current_frame = 0;
 uint8_t anim_counter = 0;
+static const char* create_opt = "[Create Wallet]";
+static uint8_t checksum_valid = 0;
 
 extern const uint8_t current_mode;
 
@@ -31,6 +38,9 @@ extern const uint8_t current_mode;
 
 static const uint8_t coin_tiles[12] = {1, 2, 3, 2, 1, 0, 1, 2, 3, 2, 1, 0};
 static const uint8_t coin_flips[12] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+
+
+uint8_t menu_mode = MENU_DEFAULT;
 
 void init_cursor_sprite(void) {
 
@@ -156,6 +166,10 @@ void wait_no_buttons(void) {
 const uint8_t konami_code[] = { J_UP, J_UP, J_DOWN, J_DOWN, J_LEFT, J_RIGHT, J_LEFT, J_RIGHT, J_B, J_A, J_START };
 
 int8_t menu(const char* title, const char** options, uint8_t num_options) BANKED {
+
+    vsync();
+    init_cursor_sprite();
+
     current_y_offset = 0;
     current_frame = 0;
     anim_counter = 0;
@@ -167,6 +181,15 @@ int8_t menu(const char* title, const char** options, uint8_t num_options) BANKED
     
     fill_bkg_rect(0, 0, 20, 18, 0);
 
+    if ((menu_mode == MENU_DISPLAY_WORDS || menu_mode == MENU_NEW_WALLET_WORDS) && !checksum_valid) {
+        set_bkg_palette(6, 1, chksum_palettes);
+        VBK_REG = 1;
+        fill_bkg_rect(17, 0, 3, 3, 6);
+        VBK_REG = 0;
+        
+        set_bkg_data(150, chksum_TILE_COUNT, chksum_tiles);
+        set_bkg_tiles(17, 0, chksum_WIDTH/8, chksum_HEIGHT/8, chksum_map);
+    }
 
     uint8_t title_len = strlen(title);
     if (title_len > 18) title_len = 18;
@@ -224,27 +247,75 @@ int8_t menu(const char* title, const char** options, uint8_t num_options) BANKED
     }
 }
 
-int8_t show_menu_with_start_pos(int8_t startPos, const char* title, const char** options, uint8_t num_options) BANKED {
+int8_t show_backup_menu(int8_t startPos, uint8_t mode, char mnemonic[12][9]) BANKED {
     if (startPos < 0) startPos = 0;
-    if (startPos >= num_options) startPos = num_options - 1;
-    
+    if (startPos > 11) startPos = 11;
+
+    menu_mode = mode;
+
+    uint8_t all_filled = 1;
+    for (uint8_t i = 0; i < 12; i++) {
+        if (mnemonic[i][0] == '\0') {
+            all_filled = 0;
+            break; 
+        }
+    }
+
+    char mnemonic_str[12 * 9 + 13] = {0};
+    char* dest = mnemonic_str;
+
+    for (uint8_t i = 0; i < 12; i++) {
+        if (i > 0) {
+            *dest++ = ' ';
+        }
+        if (mnemonic[i][0]) {
+            strcpy(dest, mnemonic[i]);
+            dest += strlen(mnemonic[i]);
+        }
+    }
+    *dest = '\0';
+
+    static char numbered[13][20];
+    const char* options[13];
+
+    for (uint8_t i = 0; i < 12; i++) {
+        if (mnemonic[i][0]) {
+            sprintf(numbered[i], "%d. %s", i + 1, mnemonic[i]);
+        } else {
+            sprintf(numbered[i], "%d. ", i + 1);
+        }
+        options[i] = numbered[i];
+    }
+
+    uint8_t num_options = 12;
+
+    if (mode == MENU_NEW_WALLET_WORDS && all_filled) {
+        options[12] = create_opt;
+        num_options = 13;
+    }
+
+    //only display checksum warning when all 12 words present
+    checksum_valid = !all_filled || bip39_checksum_valid(mnemonic_str); 
+
     cursor_pos = startPos;
     target_pos = startPos;
     current_y_offset = 0;
     current_frame = 0;
     anim_counter = 0;
-    
-    init_cursor_sprite();
+
+    const char* title = "Backup Words";
     return menu(title, options, num_options);
 }
 
 int8_t show_menu(const char* title, const char** options, uint8_t num_options) BANKED {
+
+    menu_mode = MENU_DEFAULT;
+
     cursor_pos = 0;
     target_pos = 0;
     current_y_offset = 0;
     current_frame = 0;
     anim_counter = 0;
     
-    init_cursor_sprite();
     return menu(title, options, num_options);
 }

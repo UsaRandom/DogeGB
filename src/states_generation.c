@@ -4,7 +4,7 @@
 #include <gb/gb.h>
 #include <stdio.h>
 #include <string.h>
-#include <menu.h>
+#include "menu.h"
 #include <progress.h>
 #include "src/crypto/mnemonic.h"
 #include "src/crypto/hd_wallet.h"
@@ -59,43 +59,16 @@ void handle_bonktime_entropy(void) BANKED {
 }
 
 void handle_show_generated_words(void) BANKED {
-    char title_backup[16];
-    char create_opt[16];
     char title_cancel[8];
     char opt_no[4];
     char opt_yes[4];
-    strcpy(title_backup, "Backup Words");
-    strcpy(create_opt, "[Create Wallet]");
     strcpy(title_cancel, "Cancel?");
     strcpy(opt_no, "No");
     strcpy(opt_yes, "Yes");
 
-    char numbered[12][16];
-    const char* wordMenu[13];
 
-    uint8_t all_filled = 1;
-    for (uint8_t i = 0; i < 12; i++) {
-        if (words[i][0] != '\0') {
-            if(i >= 9){
-                sprintf(numbered[i], "%u. %s", i + 1u, words[i]);
-            }
-            else {
-                sprintf(numbered[i], "%u.  %s", i + 1u, words[i]);
-            }
-        } else {
-            sprintf(numbered[i], "%u. ", i + 1u);
-            all_filled = 0;
-        }
-        wordMenu[i] = numbered[i];
-    }
-
-    uint8_t menu_count = 12;
-    if (all_filled) {
-        wordMenu[12] = create_opt;
-        menu_count = 13;
-    }
-
-    wordSelection = show_menu_with_start_pos(wordSelection, title_backup, wordMenu, menu_count);
+    //here words is a char[12][9], i need to send in a char**. so lets convert it.
+    wordSelection = show_backup_menu(wordSelection, MENU_NEW_WALLET_WORDS, words);
 
     if (wordSelection < 0) {
         const char* confirmOptions[] = { opt_no, opt_yes};
@@ -106,6 +79,14 @@ void handle_show_generated_words(void) BANKED {
         }
         wordSelection = 0;
         return;
+    }
+
+    uint8_t all_filled = 1;
+    for (uint8_t i = 0; i < 12; i++) {
+        if (words[i][0] != '\0') {
+        } else {
+            all_filled = 0;
+        }
     }
 
     if (all_filled && wordSelection == 12) {
@@ -128,10 +109,10 @@ void handle_show_generated_words(void) BANKED {
 
 void handle_generate_address(void) BANKED {
     char mnemonic_str[109] = {0};
-   for (uint8_t i = 0; i < 12; i++) {
+    for (uint8_t i = 0; i < 12; i++) {
        if (i > 0) strcat(mnemonic_str, " ");
        strcat(mnemonic_str, words[i]);
-   }
+    }
 
     show_progress_page();
 

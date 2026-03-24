@@ -59,7 +59,6 @@ uint8_t test_address_generation(void) {
 
 void handle_test_menu() BANKED {
 
-    reset_progress();
     show_progress_page();
 
 

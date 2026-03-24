@@ -106,13 +106,12 @@ uint8_t text_x_pos(const char* str) {
     return (20 - len) / 2;
 }
 
-void reset_progress(void) BANKED {
-    total_progress = 0;
-    progress_accum = 0;
-}
 
 void show_progress_page() BANKED {
+    vsync();
     clear_screen();
+    total_progress = 0;
+    progress_accum = 0;
     
     set_bkg_palette(6, 1, progress_bar_palettes);
 

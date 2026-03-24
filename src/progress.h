@@ -5,7 +5,6 @@ void add_progress(uint16_t weight) BANKED;
 
 void show_progress_page() BANKED;
 
-void reset_progress(void) BANKED;
 
 
 #define WEIGHT_PBKDF2  10UL
