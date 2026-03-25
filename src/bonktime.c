@@ -13,6 +13,9 @@
 #include "src/assets/pepe_idle.h"
 #include "src/assets/pepe_bonk.h"
 #include "src/assets/pepe_selfbonk.h"
+#include "src/assets/bells_idle.h"
+#include "src/assets/bells_bonk.h"
+#include "src/assets/bells_selfbonk.h"
 #include "src/assets/abutton.h"
 #include "src/assets/bbutton.h"
 #include "src/assets/dpadbutton_up.h"
@@ -129,6 +132,9 @@ void set_cheems_state(uint8_t state) BANKED {
             if(current_mode == PEPEGB) {
                 map = pepe_idle_map;
             }
+            else if (current_mode == BELLSGB) {
+                map = bells_idle_map;
+            }
      
             set_bkg_tiles(6, 6, cheems_idle_WIDTH/8, cheems_idle_HEIGHT/8, map);
     
@@ -139,6 +145,9 @@ void set_cheems_state(uint8_t state) BANKED {
 
             if(current_mode == PEPEGB) {
                 bonk_map = pepe_bonk_map;
+            }
+            else if (current_mode == BELLSGB) {
+                bonk_map = bells_bonk_map;
             }
      
             set_bkg_tiles(6, 6, cheems_bonk_WIDTH/8, cheems_bonk_HEIGHT/8, bonk_map);
@@ -151,6 +160,9 @@ void set_cheems_state(uint8_t state) BANKED {
             if (current_mode == PEPEGB)
             {
                 selfbonk_map = pepe_selfbonk_map;
+            }
+            else if (current_mode == BELLSGB) {
+                selfbonk_map = bells_selfbonk_map;
             }
             
      
@@ -298,18 +310,23 @@ uint8_t* bonktime(uint8_t mode) BANKED {
     set_bkg_palette(6, 1, progress_bar_palettes);
     set_bkg_data(TILE_BASE, progress_bar_TILE_COUNT, progress_bar_tiles);
 
-    if(current_mode == DOGEGB || current_mode == BELLSGB){
+    char* gameTitle = "     BONK TIME!\0";
 
+    if(current_mode == DOGEGB){
         set_bkg_data(243, cheems_idle_TILE_COUNT, cheems_idle_tiles);
         set_bkg_data(137, cheems_bonk_TILE_COUNT, cheems_bonk_tiles);
         set_bkg_data(202, cheems_selfbonk_TILE_COUNT, cheems_selfbonk_tiles);
-    }
-    else if (current_mode == PEPEGB) {
+    } else if (current_mode == BELLSGB) {
+        gameTitle = "     BELL RING!\0";
+        set_bkg_data(243, bells_idle_TILE_COUNT, bells_idle_tiles);
+        set_bkg_data(137, bells_bonk_TILE_COUNT, bells_bonk_tiles);
+        set_bkg_data(202, bells_selfbonk_TILE_COUNT, bells_selfbonk_tiles);
+    } else if (current_mode == PEPEGB) {
+        gameTitle = "     PEPE SAYS!\0";
         set_bkg_palette(5, 1, pepe_idle_palettes);
         set_bkg_data(243, pepe_idle_TILE_COUNT, pepe_idle_tiles);
         set_bkg_data(137, pepe_bonk_TILE_COUNT, pepe_bonk_tiles);
         set_bkg_data(202, pepe_selfbonk_TILE_COUNT, pepe_selfbonk_tiles);
-
     }
 
 
@@ -331,12 +348,8 @@ uint8_t* bonktime(uint8_t mode) BANKED {
         set_bkg_palette(0, 1, gb_palette);
     }
 
-    if(current_mode == DOGEGB || current_mode == BELLSGB){
-        print_str(1, "     BONK TIME!");
-    }
-    else if (current_mode == PEPEGB) {
-        print_str(1, "     PEPE SAYS!");
-    }
+
+    print_str(1, gameTitle);
 
 
     _progress = 0;

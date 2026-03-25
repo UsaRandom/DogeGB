@@ -6,6 +6,7 @@
 #include "src/assets/offlineonly.h"
 #include "src/assets/bork.h"
 #include "src/assets/pepelogo.h"
+#include "src/assets/bellslogo.h"
 
 #include "bitrot_rom.h"
 
@@ -147,6 +148,19 @@ void show_doge_splash(void) BANKED {
         bork_MAP_ATTRIBUTES_WIDTH,
         bork_MAP_ATTRIBUTES_HEIGHT,
         bork_palettes,
+        1
+    );
+}
+
+void show_bells_splash(void) BANKED {
+    show_splash(
+        bellslogo_TILE_ORIGIN,
+        bellslogo_tiles,
+        bellslogo_TILE_COUNT,
+        bellslogo_map,
+        bellslogo_MAP_ATTRIBUTES_WIDTH,
+        bellslogo_MAP_ATTRIBUTES_HEIGHT,
+        bellslogo_palettes,
         1
     );
 }

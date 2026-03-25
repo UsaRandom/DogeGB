@@ -109,7 +109,7 @@ void main(void)
             show_pepe_splash();
             break;
         case BELLSGB:
-            show_doge_splash();
+            show_bells_splash();
             break;
         default:
         break;
