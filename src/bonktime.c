@@ -489,7 +489,7 @@ uint8_t* bonktime(uint8_t mode) BANKED {
                         if (_progress > BAR_TOTAL_PX) _progress = BAR_TOTAL_PX;
                         update();
 
-                        if (_progress >= BAR_TOTAL_PX && mode == BONKTIME_GAME_MODE) break;
+                        if (_progress >= BAR_TOTAL_PX) break;
 
                         anim_timer = 30;
                         

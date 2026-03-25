@@ -10,6 +10,7 @@
 #include "src/crypto/hd_wallet.h"
 #include "src/crypto/secp256k1.h"
 #include "src/crypto/bip39_wordlist.h"
+#include "src/assets/nophotos.h"
 #include "states.h"
 #include "word_input.h"
 #include <bonktime.h>
@@ -38,25 +39,6 @@ extern wallet current_wallet;
 
 static int8_t wordSelection = 0;
 
-
-void handle_bonktime_entropy(void) BANKED {
-    uint8_t* entropy = bonktime(BONKTIME_ENTROPY_MODE);
-    
-    if(entropy == NULL) {
-        current_state = STATE_GEN_TYPE_SELECTION;
-        return;
-    }
-    
-    fill_bkg_rect(0, 0, 20, 18, 0);
-
-    char wait[19] = "Generating Words  \0";
-    gotoxy(2,8);
-    printf(wait);
-
-    generate_mnemonic(words);
-
-    current_state = STATE_SHOW_GENERATED_WORDS;
-}
 
 void handle_show_generated_words(void) BANKED {
     char title_cancel[8];

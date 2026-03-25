@@ -29,7 +29,6 @@ SRC = src/main.c \
       src/states_wallet_menu.c \
       src/states_wordtest.c \
       src/states_testing.c \
-      src/assets/arrow.c \
       src/assets/progress_bar.c \
       src/assets/keyboard.c \
       src/assets/keyboard_lightgrey.c \
@@ -51,6 +50,7 @@ SRC = src/main.c \
       src/assets/pepecoin.c \
       src/assets/bellscoin.c \
       src/assets/chksum.c \
+      src/assets/nophotos.c \
       src/splash.c \
       src/wallet.c \
       src/bonktime.c \
@@ -105,6 +105,7 @@ assets:
 	./gbdk/bin/png2asset ./raw_assets/bork.png -use_map_attributes -map -noflip -tile_origin 0 -b 7 -o ./src/assets/bork.c
 	./gbdk/bin/png2asset ./raw_assets/pepelogo.png -use_map_attributes -map -noflip -tile_origin 0 -b 7 -o ./src/assets/pepelogo.c
 	./gbdk/bin/png2asset ./raw_assets/chksum.png -map -noflip -tile_origin 150 -b 1 -o ./src/assets/chksum.c
+	./gbdk/bin/png2asset ./raw_assets/nophotos.png -map -noflip -tile_origin 150 -b 1 -o ./src/assets/nophotos.c
 
 test:
 	cd test && make
