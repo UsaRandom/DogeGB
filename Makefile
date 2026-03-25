@@ -51,6 +51,7 @@ SRC = src/main.c \
       src/assets/bellscoin.c \
       src/assets/chksum.c \
       src/assets/nophotos.c \
+      src/assets/offlineonly.c \
       src/splash.c \
       src/wallet.c \
       src/bonktime.c \
@@ -104,6 +105,7 @@ assets:
 	./gbdk/bin/png2asset ./raw_assets/dogecoin.png -tile_origin 202 -b 1 -o ./src/assets/dogecoin.c
 	./gbdk/bin/png2asset ./raw_assets/bork.png -use_map_attributes -map -noflip -tile_origin 0 -b 7 -o ./src/assets/bork.c
 	./gbdk/bin/png2asset ./raw_assets/pepelogo.png -use_map_attributes -map -noflip -tile_origin 0 -b 7 -o ./src/assets/pepelogo.c
+	./gbdk/bin/png2asset ./raw_assets/offlineonly.png -use_map_attributes -map -noflip -tile_origin 0 -b 7 -o ./src/assets/offlineonly.c
 	./gbdk/bin/png2asset ./raw_assets/chksum.png -map -noflip -tile_origin 150 -b 1 -o ./src/assets/chksum.c
 	./gbdk/bin/png2asset ./raw_assets/nophotos.png -map -noflip -tile_origin 150 -b 1 -o ./src/assets/nophotos.c
 

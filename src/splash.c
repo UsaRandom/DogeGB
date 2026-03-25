@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <gbdk/console.h>
 
+#include "src/assets/offlineonly.h"
 #include "src/assets/bork.h"
 #include "src/assets/pepelogo.h"
 
@@ -72,7 +73,8 @@ void show_splash(
     const uint8_t* map,
     uint8_t map_width,
     uint8_t map_height,
-    const palette_color_t* palette
+    const palette_color_t* palette,
+    uint8_t integrityCheck
 )  {  
     DISPLAY_OFF;
     HIDE_SPRITES;
@@ -97,10 +99,16 @@ void show_splash(
     DISPLAY_ON;
     fade_palette(white, asset_palette);
 
-    if (!quick_rom_verify_integrity()) {
+    if (integrityCheck && !quick_rom_verify_integrity()) {
         gotoxy(0, 8);
         printf(" Corrupted ROM!\n");
         while (1) vsync();
+    }
+    
+    if(!integrityCheck) {
+        for(uint8_t i = 0; i < 90 && !joypad(); i++) {
+            vsync();
+        }
     }
 
     fade_palette(asset_palette, white);
@@ -125,7 +133,8 @@ void show_pepe_splash(void) BANKED {
         pepelogo_map,
         pepelogo_MAP_ATTRIBUTES_WIDTH,
         pepelogo_MAP_ATTRIBUTES_HEIGHT,
-        pepelogo_palettes
+        pepelogo_palettes,
+        1
     );
 }
 
@@ -137,6 +146,21 @@ void show_doge_splash(void) BANKED {
         bork_map,
         bork_MAP_ATTRIBUTES_WIDTH,
         bork_MAP_ATTRIBUTES_HEIGHT,
-        bork_palettes
+        bork_palettes,
+        1
     );
+}
+
+void show_offline_warning(void) BANKED {
+    show_splash(
+        offlineonly_TILE_ORIGIN,
+        offlineonly_tiles,
+        offlineonly_TILE_COUNT,
+        offlineonly_map,
+        offlineonly_MAP_ATTRIBUTES_WIDTH,
+        offlineonly_MAP_ATTRIBUTES_HEIGHT,
+        offlineonly_palettes,
+        0
+    );
+
 }

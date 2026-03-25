@@ -99,6 +99,8 @@ void main(void)
         cpu_fast();
     }
 
+    show_offline_warning();
+
     switch(current_mode) {
         case DOGEGB:
             show_doge_splash();
