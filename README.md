@@ -50,16 +50,21 @@ To build `DogeGB.gb`
 make
 ```
 
-The default coin mode on startup is Dogecoin, but the app can be built to default to Pepecoin or Bellscoin instead by using the `MODE` flag on build.
+The default coin mode on startup is Dogecoin, but the app can be built to default to Pepecoin or Bellscoin:
 
 To build `PepeGB.gb`
 ```bash
-make MODE=Pepe
+make pepe
 ```
 
-To Build `BellsGB.gb`
+To build `BellsGB.gb`
 ```bash
-make MODE=Bells
+make bells
+```
+
+To build all three:
+```bash
+make all
 ```
 
 ## Building on WSL (Windows)

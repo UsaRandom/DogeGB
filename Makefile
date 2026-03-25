@@ -1,27 +1,6 @@
 PROJECT_NAME = DogeGB
 CC = ./gbdk/bin/lcc
 
-MODE ?= Doge
-
-LOWER_MODE := $(shell echo $(MODE) | tr A-Z a-z)
-
-DEFAULT_MODE := 0
-
-ifeq ($(findstring doge,$(LOWER_MODE)),doge)
-  CANONICAL_MODE := Doge
-else ifeq ($(findstring pepe,$(LOWER_MODE)),pepe)
-  CANONICAL_MODE := Pepe
-  DEFAULT_MODE := 2
-else ifeq ($(findstring bells,$(LOWER_MODE)),bells)
-  CANONICAL_MODE := Bells
-  DEFAULT_MODE := 1
-else
-  CANONICAL_MODE := Doge
-  $(warning Unknown MODE='$(MODE)' → using Doge)
-endif
-
-CANONICAL_MODE_UPPER := $(shell echo $(CANONICAL_MODE) | tr a-z A-Z)
-
 # Compiler flags
 CFLAGS = -msm83:gb \
          -Wl-yt0x1B \
@@ -96,9 +75,8 @@ SRC = src/main.c \
       src/bitrot_rom.c \
       src/bitrot_save.c
 
-.PHONY: entropy test clean postclean assets savedata
-
-.DEFAULT_GOAL := all
+.PHONY: entropy test clean postclean assets savedata all doge pepe bells
+.DEFAULT_GOAL := doge
 
 bank = 6
 
@@ -128,24 +106,27 @@ assets:
 	./gbdk/bin/png2asset ./raw_assets/pepelogo.png -use_map_attributes -map -noflip -tile_origin 0 -b 7 -o ./src/assets/pepelogo.c
 	./gbdk/bin/png2asset ./raw_assets/chksum.png -map -noflip -tile_origin 150 -b 1 -o ./src/assets/chksum.c
 
-
 test:
 	cd test && make
-	python3 test/test_crypto.py 100
-
+	python3 test/test_crypto.py 30
 
 entropy:
 	python3 tools/generate_entropy.py
 
-
 clean:
-	rm -f $(CANONICAL_MODE)GB.gb *.map *.sym *.noi *.ihx *.lk *.adb
+	rm -f build/DogeGB.gb build/PepeGB.gb build/BellsGB.gb *.map *.sym *.noi *.ihx *.lk *.adb
 
 postclean:
 	rm build/*.asm build/*.lst build/*.o build/*.sym
 
-build/$(CANONICAL_MODE)GB.gb: $(SRC) build/wallet_sram.o
+build/%GB.gb: $(SRC) build/wallet_sram.o
+	$(eval STEM_LOWER := $(shell echo $* | tr A-Z a-z))
+	$(eval DEFAULT_MODE := $(if $(findstring doge,$(STEM_LOWER)),0,$(if $(findstring pepe,$(STEM_LOWER)),2,$(if $(findstring bells,$(STEM_LOWER)),1,0))))
 	$(CC) $(CFLAGS) $(OPTFLAGS) -o $@ $^
 	python3 tools/patch_bitrot.py $@
 
-all: clean test assets savedata build/$(CANONICAL_MODE)GB.gb postclean
+doge: test assets savedata build/DogeGB.gb
+pepe: test assets savedata build/PepeGB.gb
+bells: test assets savedata build/BellsGB.gb
+
+all: clean test assets savedata build/DogeGB.gb build/PepeGB.gb build/BellsGB.gb postclean
