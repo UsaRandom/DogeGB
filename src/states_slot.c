@@ -50,8 +50,8 @@ void handle_slot_selection(void) {
         "",
         gameTitle,
         "",
-        "[Run Tests]",
-        "[Set PIN]"
+        "[Set PIN]",
+        "[Run Tests]"
     };
 
 
@@ -87,12 +87,16 @@ void handle_slot_selection(void) {
             current_state = STATE_GEN_TYPE_SELECTION;
         }
     }
+
     if(slot == MAX_SLOTS + 1) {
         current_state = STATE_BONKTIME_GAME;
     }
 
     if(slot == MAX_SLOTS + 3) {
+        current_state = STATE_SET_PIN;
+    }
 
+    if(slot == MAX_SLOTS + 4) {
         char* yesNo[] = {
             "No",
             "Yes"
@@ -104,12 +108,8 @@ void handle_slot_selection(void) {
             current_state = STATE_TESTING;
         }
     }
-    if(slot == MAX_SLOTS + 4) {
-        current_state = STATE_SET_PIN;
-    }
 
     if(slot == -2){
-
         const char* menu_options[3] = {
             "DogeGB",
             "BellsGB",

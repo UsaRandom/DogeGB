@@ -1,6 +1,5 @@
 
 
-
 #include <gb/gb.h>
 #include <stdio.h>
 #include <stdbool.h>
@@ -97,7 +96,7 @@ void handle_test_menu() BANKED {
     }
 
     if(failed){
-        draw_text(11, "!!! Tests Failed !!!", 0);
+        draw_text(11, "  ! Tests Failed !  ", 0);
     }
     else {
         draw_text(11, "Tests Pass", 5);
@@ -105,7 +104,10 @@ void handle_test_menu() BANKED {
     draw_text(13, "Press [Start]!", 3);
 
     while((joypad() & J_START) == 0) {
-        vsync_stir_entropy();
+        stir_entropy();
+    }
+    while(joypad()){
+        stir_entropy();
     }
 
     current_state = STATE_SLOT_SELECTION;

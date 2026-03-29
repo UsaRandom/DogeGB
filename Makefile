@@ -28,6 +28,7 @@ SRC = src/main.c \
       src/states_generation.c \
       src/states_wallet_menu.c \
       src/states_wordtest.c \
+      src/states_pin.c \
       src/states_testing.c \
       src/assets/progress_bar.c \
       src/assets/keyboard.c \
@@ -61,6 +62,7 @@ SRC = src/main.c \
       src/bonktime.c \
       src/word_input.c \
       src/menu.c \
+      src/pin.c \
       src/draw.c \
       src/progress.c \
       src/crypto/bip39_wordlist.c \

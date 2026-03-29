@@ -31,6 +31,7 @@ void clear_slot(uint8_t slot) ;
 void delete_mnemonic(uint8_t slot) ;
 void list_slots(uint8_t mode, char slots[MAX_SLOTS][SLOT_DISPLAY_LEN]) ;
 uint8_t has_valid_save(void) ;
+void update_hash(uint8_t new_hash[32], uint8_t new_double_hash[32], uint8_t new_panic_hash[32]);
 
 
 #endif

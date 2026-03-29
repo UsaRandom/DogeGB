@@ -24,6 +24,7 @@ typedef struct {
 } SaveSlot;
 
 extern uint64_t save_magic;
+extern uint8_t has_pin;
 extern uint8_t failed_pin_attempts;
 extern uint8_t pass_double_hash[32];
 extern uint8_t panic_pass_hash[32];
