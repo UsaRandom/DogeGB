@@ -42,7 +42,7 @@ static const uint8_t coin_flips[12] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 
 uint8_t menu_mode = MENU_DEFAULT;
 
-void init_cursor_sprite(void) {
+void init_cursor_sprite(void) BANKED {
 
     switch(current_mode)
     {

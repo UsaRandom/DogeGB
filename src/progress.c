@@ -110,6 +110,7 @@ uint8_t text_x_pos(const char* str) {
 void show_progress_page() BANKED {
     vsync();
     clear_screen();
+    total_work = 0UL;
     total_progress = 0;
     progress_accum = 0;
     
