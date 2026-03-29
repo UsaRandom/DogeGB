@@ -113,7 +113,7 @@ uint8_t display_pin_entry_screen(PinState pin_state, uint8_t attempts_left, uint
             draw_text(12, "[Start] to Confirm", 1);
         }
         else {
-            draw_text(12, "                    ", 0);
+            draw_text(12, "                    ", 1);
         }
 
         static const uint8_t dash_map[] = {4, 6, 8, 11, 13, 15};
