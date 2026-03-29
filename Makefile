@@ -4,21 +4,22 @@ CC = ./gbdk/bin/lcc
 # Compiler flags
 CFLAGS = -msm83:gb \
          -Wl-yt0x1B \
-         -Wl-yo8 \
-         -Wl-ya4 \
+         -Wl-yo16 \
+         -Wl-ya1 \
          -Wb-ext=.rel \
          -Wm-yC \
          -I. \
          -Ibuild \
          -Isrc/crypto \
          -Iqr \
-         -Isrc
+         -Isrc \
+         -DDEFAULT_MODE=$(DEFAULT_MODE)
 
 # Optimization flags (passed via -Wf)
 OPTFLAGS = # -Wf--opt-code-speed \
            #-Wf--max-allocs-per-node1000
 
-# Source files - one per line for easy editing!
+# Source files
 SRC = src/main.c \
       src/qr/qrcodegen.c \
       src/qr/qr_wrapper.c \
@@ -26,14 +27,24 @@ SRC = src/main.c \
       src/states_bonk.c \
       src/states_generation.c \
       src/states_wallet_menu.c \
-      src/assets/arrow.c \
+      src/states_wordtest.c \
+      src/states_pin.c \
+      src/states_testing.c \
       src/assets/progress_bar.c \
       src/assets/keyboard.c \
       src/assets/keyboard_lightgrey.c \
       src/assets/bork.c \
+      src/assets/pepelogo.c \
+      src/assets/bellslogo.c \
       src/assets/cheems_idle.c \
       src/assets/cheems_bonk.c \
       src/assets/cheems_selfbonk.c \
+      src/assets/pepe_idle.c \
+      src/assets/pepe_bonk.c \
+      src/assets/pepe_selfbonk.c \
+      src/assets/bells_idle.c \
+      src/assets/bells_bonk.c \
+      src/assets/bells_selfbonk.c \
       src/assets/abutton.c \
       src/assets/bbutton.c \
       src/assets/dpadbutton_up.c \
@@ -43,11 +54,15 @@ SRC = src/main.c \
       src/assets/dogecoin.c \
       src/assets/pepecoin.c \
       src/assets/bellscoin.c \
+      src/assets/chksum.c \
+      src/assets/nophotos.c \
+      src/assets/offlineonly.c \
       src/splash.c \
       src/wallet.c \
       src/bonktime.c \
       src/word_input.c \
       src/menu.c \
+      src/pin.c \
       src/draw.c \
       src/progress.c \
       src/crypto/bip39_wordlist.c \
@@ -63,27 +78,29 @@ SRC = src/main.c \
       src/crypto/secp256k1.c \
       src/crypto/hmac.c \
       src/crypto/ripemd160.c \
+      src/crypto/entropy_data.c \
       src/bitrot_rom.c \
-      src/bitrot_save.c \
-      build/entropy_data.c
+      src/bitrot_save.c
 
+.PHONY: entropy test clean postclean assets savedata all doge pepe bells
+.DEFAULT_GOAL := doge
 
-.DEFAULT_GOAL := all
-
-# Generate entropy pool with random data
-.entropy:
-	./generate_entropy.sh
-
-# Asset conversion parameters
 bank = 6
 
-.savedata:
+savedata:
+	mkdir -p build
 	$(CC) -Wf-ba0 -c -o build/wallet_sram.o src/wallet_sram.c
 
-.assets:
+assets:
+	./gbdk/bin/png2asset ./raw_assets/pepe_idle.png -map -noflip -tile_origin 243 -b $(bank) -o ./src/assets/pepe_idle.c
+	./gbdk/bin/png2asset ./raw_assets/pepe_bonk.png -map -noflip -tile_origin 137 -b $(bank) -o ./src/assets/pepe_bonk.c
+	./gbdk/bin/png2asset ./raw_assets/pepe_selfbonk.png -map -noflip -tile_origin 202 -b $(bank) -o ./src/assets/pepe_selfbonk.c
 	./gbdk/bin/png2asset ./raw_assets/cheems_idle.png -map -noflip -tile_origin 243 -b $(bank) -o ./src/assets/cheems_idle.c
 	./gbdk/bin/png2asset ./raw_assets/cheems_bonk.png -map -noflip -tile_origin 137 -b $(bank) -o ./src/assets/cheems_bonk.c
 	./gbdk/bin/png2asset ./raw_assets/cheems_selfbonk.png -map -noflip -tile_origin 202 -b $(bank) -o ./src/assets/cheems_selfbonk.c
+	./gbdk/bin/png2asset ./raw_assets/bells_idle.png -map -noflip -tile_origin 243 -b $(bank) -o ./src/assets/bells_idle.c
+	./gbdk/bin/png2asset ./raw_assets/bells_bonk.png -map -noflip -tile_origin 137 -b $(bank) -o ./src/assets/bells_bonk.c
+	./gbdk/bin/png2asset ./raw_assets/bells_selfbonk.png -map -noflip -tile_origin 202 -b $(bank) -o ./src/assets/bells_selfbonk.c
 	./gbdk/bin/png2asset ./raw_assets/abutton.png -map -noflip -tile_origin 186 -b $(bank) -o ./src/assets/abutton.c
 	./gbdk/bin/png2asset ./raw_assets/bbutton.png -map -noflip -tile_origin 190 -b $(bank) -o ./src/assets/bbutton.c
 	./gbdk/bin/png2asset ./raw_assets/dpadbutton_up.png -map -noflip -tile_origin 194 -b $(bank) -o ./src/assets/dpadbutton_up.c
@@ -95,21 +112,34 @@ bank = 6
 	./gbdk/bin/png2asset ./raw_assets/pepecoin.png -tile_origin 202 -b 1 -o ./src/assets/pepecoin.c
 	./gbdk/bin/png2asset ./raw_assets/bellscoin.png -tile_origin 202 -b 1 -o ./src/assets/bellscoin.c
 	./gbdk/bin/png2asset ./raw_assets/dogecoin.png -tile_origin 202 -b 1 -o ./src/assets/dogecoin.c
+	./gbdk/bin/png2asset ./raw_assets/bork.png -use_map_attributes -map -noflip -tile_origin 0 -b 7 -o ./src/assets/bork.c
+	./gbdk/bin/png2asset ./raw_assets/pepelogo.png -use_map_attributes -map -noflip -tile_origin 0 -b 7 -o ./src/assets/pepelogo.c
+	./gbdk/bin/png2asset ./raw_assets/bellslogo.png -use_map_attributes -map -noflip -tile_origin 0 -b 7 -o ./src/assets/bellslogo.c
+	./gbdk/bin/png2asset ./raw_assets/offlineonly.png -use_map_attributes -map -noflip -tile_origin 0 -b 7 -o ./src/assets/offlineonly.c
+	./gbdk/bin/png2asset ./raw_assets/chksum.png -map -noflip -tile_origin 150 -b 1 -o ./src/assets/chksum.c
+	./gbdk/bin/png2asset ./raw_assets/nophotos.png -map -noflip -tile_origin 150 -b 1 -o ./src/assets/nophotos.c
 
-#put the test 
-.test:
-	python3 tools/generate_entropy.py
+test:
 	cd test && make
-	python3 test/test_crypto.py 100
+	python3 test/test_crypto.py 30
 
-.clean:
-	rm -f $(PROJECT_NAME).gb *.map *.sym *.noi *.ihx *.lk *.adb
+entropy:
+	python3 tools/generate_entropy.py
 
-.postclean:
-	rm build/*.c build/*.h build/*.asm build/*.lst build/*.o build/*.sym
+clean:
+	rm -f build/DogeGB.gb build/PepeGB.gb build/BellsGB.gb *.map *.sym *.noi *.ihx *.lk *.adb
 
-build/$(PROJECT_NAME).gb: $(SRC) build/wallet_sram.o
+postclean:
+	rm build/*.asm build/*.lst build/*.o build/*.sym
+
+build/%GB.gb: $(SRC) build/wallet_sram.o
+	$(eval STEM_LOWER := $(shell echo $* | tr A-Z a-z))
+	$(eval DEFAULT_MODE := $(if $(findstring doge,$(STEM_LOWER)),0,$(if $(findstring pepe,$(STEM_LOWER)),2,$(if $(findstring bells,$(STEM_LOWER)),1,0))))
 	$(CC) $(CFLAGS) $(OPTFLAGS) -o $@ $^
 	python3 tools/patch_bitrot.py $@
 
-all: .clean .test .assets .savedata build/$(PROJECT_NAME).gb .postclean
+doge: test assets savedata build/DogeGB.gb
+pepe: test assets savedata build/PepeGB.gb
+bells: test assets savedata build/BellsGB.gb
+
+all: clean test assets savedata build/DogeGB.gb build/PepeGB.gb build/BellsGB.gb postclean

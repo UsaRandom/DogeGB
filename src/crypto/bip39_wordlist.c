@@ -4,7 +4,7 @@
 #include <gbdk/platform.h>
 #include <string.h>
 #include <ctype.h>  // for tolower()
-
+#include "sha256.h"
 #include <gb/gb.h>
 
 extern const char* const bip39_words_1[1024];
@@ -98,4 +98,77 @@ char* find_unique_word(const char* prefix) BANKED {
     }
     
     return unique;
+}
+
+int bip39_get_word_index(const char* word) NONBANKED {
+    if (!word || !word[0]) return -1;
+
+    char lower[9];
+    int i = 0;
+    while (word[i] && i < 8) {
+        lower[i] = tolower(word[i]);
+        i++;
+    }
+    lower[i] = '\0';
+
+    int low = 0;
+    int high = 2047;
+    while (low <= high) {
+        int mid = (low + high) >> 1;
+        char buf[9];
+        get_bip39_word(mid, buf);
+        int cmp = strcmp(lower, buf);
+        if (cmp == 0) return mid;
+        if (cmp < 0) high = mid - 1;
+        else low = mid + 1;
+    }
+    return -1;
+}
+
+uint8_t bip39_checksum_valid(const char* mnemonic) BANKED {
+    uint8_t entropy[16] = {0};
+    uint8_t bitpos = 0;
+    const char* p = mnemonic;
+    int wordcnt = 0;
+    int last_idx = -1;
+
+    while (*p && wordcnt < 12) {
+        while (*p == ' ' || *p == '\t' || *p == '\n') p++;
+        if (!*p) break;
+
+        char word[9];
+        int i = 0;
+        while (*p && *p != ' ' && *p != '\t' && *p != '\n' && i < 8) {
+            word[i++] = *p++;
+        }
+        word[i] = '\0';
+
+        int idx = bip39_get_word_index(word);
+        if (idx < 0) return 0;
+
+        last_idx = idx;
+        wordcnt++;
+
+        
+        int bits = (wordcnt < 12) ? 11 : 7;
+        for (int b = 10; b > 10 - bits; b--) {
+            if (idx & (1 << b)) {
+                entropy[bitpos >> 3] |= 0x80 >> (bitpos & 7);
+            }
+            bitpos++;
+        }
+    }
+
+    if (wordcnt != 12) return 0;
+
+    
+    uint8_t expected = last_idx & 0x0F;
+
+    SHA256_CTX ctx;
+    uint8_t hash[32];
+    sha256_init(&ctx);
+    sha256_update(&ctx, entropy, 16);
+    sha256_final(&ctx, hash);
+
+    return ((hash[0] >> 4) == expected) ? 1 : 0;
 }

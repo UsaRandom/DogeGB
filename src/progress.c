@@ -7,6 +7,7 @@
 #include <draw.h>
 #include "src/assets/progress_bar.h"
 #include <gbdk/metasprites.h>
+#include "states.h"
 
 #pragma bank 6
 
@@ -24,6 +25,8 @@ const unsigned long TOTAL_WORK_UL = (unsigned long)2048UL * WEIGHT_PBKDF2 +
 
 unsigned long progress_accum = 0UL;
 unsigned long total_work = 0UL;
+
+extern AppState current_state;
 
 
 
@@ -85,7 +88,7 @@ void add_progress(uint16_t weight) BANKED
         }
 
 
-        if(total_work >= TOTAL_WORK_UL){
+        if(total_work >= TOTAL_WORK_UL && current_state != STATE_TESTING){
             gotoxy(0,8);
             printf("     Just a bit    \n");
             printf("       longer      ");
@@ -103,13 +106,13 @@ uint8_t text_x_pos(const char* str) {
     return (20 - len) / 2;
 }
 
-void reset_progress(void) BANKED {
-    total_progress = 0;
-    progress_accum = 0;
-}
 
 void show_progress_page() BANKED {
+    vsync();
     clear_screen();
+    total_work = 0UL;
+    total_progress = 0;
+    progress_accum = 0;
     
     set_bkg_palette(6, 1, progress_bar_palettes);
 
@@ -124,12 +127,15 @@ void show_progress_page() BANKED {
         VBK_REG = 0;
     }
 
-    gotoxy(1,1);
-    printf("   Address Gen.");
+    if(current_state != STATE_TESTING)
+    {
+        gotoxy(1,1);
+        printf("   Address Gen.");
 
-    gotoxy(0,8);
-    printf("   This will take\n");
-    printf("    a long time.");
+        gotoxy(0,8);
+        printf("   This will take\n");
+        printf("    a long time.");
+    }
 
     unsigned char top_empty[BAR_TOTAL_TILES];
     unsigned char bot_empty[BAR_TOTAL_TILES];

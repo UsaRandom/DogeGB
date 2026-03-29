@@ -91,12 +91,12 @@ void mnemonic_to_seed(const char *mnemonic, uint8_t *seed) BANKED {
 
 
     // Disable interrupts during heavy crypto to avoid stack corruption
-    #ifndef __APPLE__
+    #ifndef TEST_MODE
     __asm__("di");
     #endif
     pbkdf2_hmac_sha512(seed, (const uint8_t*)mnemonic, my_strlen(mnemonic),
                        salt, salt_len, 2048);
-    #ifndef __APPLE__
+    #ifndef TEST_MODE
     __asm__("ei");
     #endif
 }

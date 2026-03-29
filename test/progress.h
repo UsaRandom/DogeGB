@@ -9,7 +9,6 @@ void add_progress(uint16_t weight) BANKED;
 
 void show_progress_page(char* title, char* message) BANKED;
 
-void reset_progress(void) BANKED;
 
 
 // Tunable weights — easy to adjust during testing!

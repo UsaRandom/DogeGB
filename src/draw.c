@@ -52,7 +52,7 @@ void clear_screen(void) BANKED {
     gotoxy(0, 0);
 }
 
-void draw_text(uint8_t y, const char* str, uint8_t start_x) BANKED {
+void draw_text(uint8_t y, char* str, uint8_t start_x) NONBANKED {
     uint8_t len = strlen(str);
     if (len > 18) len = 18;
     

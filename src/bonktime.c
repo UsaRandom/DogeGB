@@ -10,6 +10,12 @@
 #include "src/assets/cheems_idle.h"
 #include "src/assets/cheems_bonk.h"
 #include "src/assets/cheems_selfbonk.h"
+#include "src/assets/pepe_idle.h"
+#include "src/assets/pepe_bonk.h"
+#include "src/assets/pepe_selfbonk.h"
+#include "src/assets/bells_idle.h"
+#include "src/assets/bells_bonk.h"
+#include "src/assets/bells_selfbonk.h"
 #include "src/assets/abutton.h"
 #include "src/assets/bbutton.h"
 #include "src/assets/dpadbutton_up.h"
@@ -17,6 +23,7 @@
 #include "src/assets/dpadbutton_left.h"
 #include "src/assets/dpadbutton_right.h"
 #include "bonktime.h"
+#include "wallet.h"
 
 #include "entropy_data.h"
 
@@ -46,10 +53,16 @@
 #define TARGET_RIGHT 5
 
 #define TARGET_NULL 6
-#define NUMBER_OF_PRESSES 72
+
+
+BANKREF_EXTERN(pepe_bonk)
 
 
 uint8_t _progress = 0;
+uint8_t progress_per_button = 2;
+uint8_t entropy_mode_required_presses = 72;
+
+
 uint8_t bonk_current_state = STATE_IDLE;
 uint8_t target_button = TARGET_A;
 uint8_t anim_timer = 0;
@@ -62,8 +75,9 @@ const uint16_t INTERVAL_STEP = 10;
 uint8_t prompt_timer = 0;
 uint16_t current_interval = 0;
 
-
+extern uint16_t pool_ptr;
 extern uint8_t entropy_pool[ENTROPY_POOL_SIZE];
+extern uint8_t current_mode;
 
 
 
@@ -112,18 +126,47 @@ void set_cheems_state(uint8_t state) BANKED {
 
     switch (state) {
         case STATE_IDLE:
+
+            char* map = cheems_idle_map;
+
+            if(current_mode == PEPEGB) {
+                map = pepe_idle_map;
+            }
+            else if (current_mode == BELLSGB) {
+                map = bells_idle_map;
+            }
      
-            set_bkg_tiles(6, 6, cheems_idle_WIDTH/8, cheems_idle_HEIGHT/8, cheems_idle_map);
+            set_bkg_tiles(6, 6, cheems_idle_WIDTH/8, cheems_idle_HEIGHT/8, map);
     
             break;
         case STATE_BONK:
+
+            char* bonk_map = cheems_bonk_map;
+
+            if(current_mode == PEPEGB) {
+                bonk_map = pepe_bonk_map;
+            }
+            else if (current_mode == BELLSGB) {
+                bonk_map = bells_bonk_map;
+            }
      
-            set_bkg_tiles(6, 6, cheems_bonk_WIDTH/8, cheems_bonk_HEIGHT/8, cheems_bonk_map);
+            set_bkg_tiles(6, 6, cheems_bonk_WIDTH/8, cheems_bonk_HEIGHT/8, bonk_map);
     
             break;
         case STATE_SELF_BONK:
+        
+            char* selfbonk_map = cheems_selfbonk_map;
+
+            if (current_mode == PEPEGB)
+            {
+                selfbonk_map = pepe_selfbonk_map;
+            }
+            else if (current_mode == BELLSGB) {
+                selfbonk_map = bells_selfbonk_map;
+            }
+            
      
-            set_bkg_tiles(6, 6, cheems_selfbonk_WIDTH/8, cheems_selfbonk_HEIGHT/8, cheems_selfbonk_map);
+            set_bkg_tiles(6, 6, cheems_selfbonk_WIDTH/8, cheems_selfbonk_HEIGHT/8, selfbonk_map);
     
             break;
     }
@@ -194,24 +237,7 @@ uint8_t get_next_target() {
 
 static uint16_t last_tick = 0;
 volatile uint8_t logic_tick = 0;
-uint16_t pool_ptr = 0;
 
-void stir_entropy(void) {
-    // Sample hardware
-    uint8_t sample = DIV_REG ^ LY_REG ^ STAT_REG;
-    
-    // Mix into current byte (simple XOR for base entropy addition)
-    entropy_pool[pool_ptr] ^= sample;
-    
-    // Nonlinear spread to next byte (addition for carry)
-    entropy_pool[(pool_ptr + 1) % ENTROPY_POOL_SIZE] += sample; 
-    
-    // Bit-shifted mix to a farther byte (e.g., +7 for some diffusion without locality)
-    entropy_pool[(pool_ptr + 7) % ENTROPY_POOL_SIZE] ^= (sample << 1); 
-    
-    // Advance pointer
-    pool_ptr = (pool_ptr + 1) % ENTROPY_POOL_SIZE;
-}
 
 void timer_isr() {
     logic_tick = 1; // Signal that it's time to update the game
@@ -234,6 +260,22 @@ void add_entropy(uint8_t keys) {
     entropy_pool[(pool_ptr + 13) % ENTROPY_POOL_SIZE] += (delta >> 8);  // High byte to offset (13 is fine, prime-ish)
     pool_ptr = (pool_ptr + 1) % ENTROPY_POOL_SIZE;
 }
+
+void print_str(uint8_t line, const char* str) {
+    unsigned char tiles[20];
+    for (uint8_t i = 0; i < strlen(str); i++) {
+        char c = str[i];
+        tiles[i] = c - 32;
+        if(c == ' '){
+            tiles[i] = 137;
+        }
+        if(c == '!'){
+            tiles[i] = 72;
+        } 
+    }
+    set_bkg_tiles(0, line, strlen(str), 1, tiles);
+}
+
 
 // --- MAIN FUNCTION ---
 uint8_t* bonktime(uint8_t mode) BANKED {
@@ -268,9 +310,25 @@ uint8_t* bonktime(uint8_t mode) BANKED {
     set_bkg_palette(6, 1, progress_bar_palettes);
     set_bkg_data(TILE_BASE, progress_bar_TILE_COUNT, progress_bar_tiles);
 
-    set_bkg_data(243, cheems_idle_TILE_COUNT, cheems_idle_tiles);
-    set_bkg_data(137, cheems_bonk_TILE_COUNT, cheems_bonk_tiles);
-    set_bkg_data(202, cheems_selfbonk_TILE_COUNT, cheems_selfbonk_tiles);
+    char* gameTitle = "     BONK TIME!\0";
+
+    if(current_mode == DOGEGB){
+        set_bkg_data(243, cheems_idle_TILE_COUNT, cheems_idle_tiles);
+        set_bkg_data(137, cheems_bonk_TILE_COUNT, cheems_bonk_tiles);
+        set_bkg_data(202, cheems_selfbonk_TILE_COUNT, cheems_selfbonk_tiles);
+    } else if (current_mode == BELLSGB) {
+        gameTitle = "     BELL RING!\0";
+        set_bkg_data(243, bells_idle_TILE_COUNT, bells_idle_tiles);
+        set_bkg_data(137, bells_bonk_TILE_COUNT, bells_bonk_tiles);
+        set_bkg_data(202, bells_selfbonk_TILE_COUNT, bells_selfbonk_tiles);
+    } else if (current_mode == PEPEGB) {
+        gameTitle = "     PEPE SAYS!\0";
+        set_bkg_palette(5, 1, pepe_idle_palettes);
+        set_bkg_data(243, pepe_idle_TILE_COUNT, pepe_idle_tiles);
+        set_bkg_data(137, pepe_bonk_TILE_COUNT, pepe_bonk_tiles);
+        set_bkg_data(202, pepe_selfbonk_TILE_COUNT, pepe_selfbonk_tiles);
+    }
+
 
 
     if(_cpu == CGB_TYPE) {
@@ -290,21 +348,9 @@ uint8_t* bonktime(uint8_t mode) BANKED {
         set_bkg_palette(0, 1, gb_palette);
     }
 
-    unsigned char tiles[20];
-    const char* title = "     Bonk Time!";
-    for (uint8_t i = 0; i < strlen(title); i++) {
-        char c = title[i];
-        tiles[i] = c - 32;
-        if(c == ' '){
-            tiles[i] = 137;
-        }
-        if(c == '!'){
-            tiles[i] = 72; //'!' is moved to where 'h' is 
-        } 
-    }
 
-    set_bkg_tiles(0, 1, strlen(title), 1, tiles);
-    
+    print_str(1, gameTitle);
+
 
     _progress = 0;
     update();
@@ -325,22 +371,67 @@ uint8_t* bonktime(uint8_t mode) BANKED {
     uint8_t press_count = 0;
 
     setup_timer();
-    pool_ptr = 0;
+    
+    while (joypad()) { stir_entropy(); }
+
     last_tick = DIV_REG | ((uint16_t)LY_REG << 8);
 
     uint8_t canceled_entropy_mode = 0;
 
+    uint8_t ly_min = 255u;
+    uint8_t ly_max = 0u;
+    uint8_t ly_buckets[10] = {0};  // 153/16 ≈ 9.5 buckets
+    memset(ly_buckets, 0, sizeof(ly_buckets));
+
+    uint8_t fq_previous_keys = joypad();
+    uint16_t fq_press_count = 0;
+
+    uint8_t keys = 0;
+
     while(1) {
-        
-        // Stir the pot every single frame, even if no button is pressed
         seed_acc ^= DIV_REG;
         seed_acc ^= LY_REG;
 
         stir_entropy();
 
+        keys = joypad();
+
+        if(keys && !fq_previous_keys && fq_press_count < 32 && mode == BONKTIME_ENTROPY_MODE) {
+            fq_press_count++;
+
+            uint8_t ly = LY_REG;
+            if (ly < ly_min) ly_min = ly;
+            if (ly > ly_max) ly_max = ly;
+
+            uint8_t bucket = ly >> 4;
+            if (bucket < 10 && ly_buckets[bucket] == 0) {
+                ly_buckets[bucket] = 1;
+            }
+            if (fq_press_count == 32) {
+                uint8_t unique = 0;
+                for (uint8_t b = 0; b < 10; b++) if (ly_buckets[b]) unique++;
+
+                if ((ly_max - ly_min <= 42u) || unique <= 6u) {
+                
+                    //Input Quantization
+                    //This is a low-entropy problem on certain emulators
+                    //where inputs are only registered on certain scanlines (VBLANK, etc).
+                    //
+                    //We increase play time to account for this.
+                    progress_per_button = 1;
+                    entropy_mode_required_presses = 144;
+                    _progress = press_count;
+
+                    print_str(4, "      EMULATOR");
+                    print_str(5, "      DETECTED");
+                    update();
+                }                
+            }
+        }
+        fq_previous_keys = keys;
+
         if(logic_tick) {
             logic_tick = 0;
-            uint8_t keys = joypad();
             
             // Always tick the prompt timer when in idle (waiting for input)
             if (bonk_current_state == STATE_IDLE) {
@@ -398,8 +489,8 @@ uint8_t* bonktime(uint8_t mode) BANKED {
 
                         if(mode == BONKTIME_ENTROPY_MODE) {
                             seed_acc ^= DIV_REG; 
-                            _progress += 2;
-                            if (press_count < NUMBER_OF_PRESSES) {
+                            _progress += progress_per_button;
+                            if (press_count < entropy_mode_required_presses) {
                                 add_entropy(keys);
                                 press_count++;
                             }
@@ -411,9 +502,9 @@ uint8_t* bonktime(uint8_t mode) BANKED {
                         if (_progress > BAR_TOTAL_PX) _progress = BAR_TOTAL_PX;
                         update();
 
-                        if (_progress >= BAR_TOTAL_PX && mode == BONKTIME_GAME_MODE) break;
+                        if (_progress >= BAR_TOTAL_PX) break;
 
-                        anim_timer = 20;
+                        anim_timer = 30;
                         
                         current_interval -= INTERVAL_STEP;
 
@@ -432,8 +523,8 @@ uint8_t* bonktime(uint8_t mode) BANKED {
                         if(mode == BONKTIME_ENTROPY_MODE) {
                             // In entropy collection mode, each bonk adds entropy and progresses
                             seed_acc ^= DIV_REG; // Mix in current DIV_REG value
-                            _progress += 2;
-                            if (press_count < NUMBER_OF_PRESSES) {
+                            _progress += progress_per_button;
+                            if (press_count < entropy_mode_required_presses) {
                                 add_entropy(keys);
                                 press_count++;
                             }

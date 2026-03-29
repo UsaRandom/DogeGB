@@ -4,7 +4,7 @@
 #include <gb/gb.h>
 #include <stdio.h>
 #include <string.h>
-#include <menu.h>
+#include "menu.h"
 #include <wallet.h>
 #include "states.h"
 #include "src/qr/qr_wrapper.h"
@@ -96,48 +96,33 @@ void handle_wallet_menu(void) BANKED {
             qr_generate(current_wallet.address, 34);
             qr_render();
 
-            while(!joypad()) {vsync();}
+            while(!joypad()) {stir_entropy();}
             init_draw();
         return;
     }
     
 
     if (choiceCount == 4 && selection == 1) {
-        static const char* numberedWords[12];
-        static char wordBuffers[12][16];
-        uint8_t wordIndex = 0;
-        char *src = current_wallet.mnemonic;
+        char backup_words[12][9] = {{0}}; 
+        const char* src = current_wallet.mnemonic;
+        uint8_t i = 0;
 
-        while (wordIndex < 12 && *src != '\0') {
-            char *dst = wordBuffers[wordIndex];
-            
-            uint8_t num = wordIndex + 1;
-            if (num < 10) {
-                *dst++ = '0' + num;
-            } else {
-                *dst++ = '0' + (num / 10);
-                *dst++ = '0' + (num % 10);
-            }
-            *dst++ = '.';
-            *dst++ = ' ';
+        while (i < 12 && *src != '\0') {
+            while (*src == ' ' || *src == '\t' || *src == '\n') src++;
+            if (*src == '\0') break;
 
-            if(num < 10){
-                *dst++ = ' ';
+            uint8_t j = 0;
+            while (*src && *src != ' ' && j < 8) {
+                backup_words[i][j++] = *src++;
             }
-            
-            uint8_t chars = 0;
-            while (*src != ' ' && *src != '\0' && chars < 12) {
-                *dst++ = *src++;
-                chars++;
-            }
-            *dst = '\0';
-            
-            numberedWords[wordIndex] = wordBuffers[wordIndex];
-            wordIndex++;
-            
+            backup_words[i][j] = '\0';
+
+            i++;
             while (*src == ' ') src++;
         }
-        show_menu("Backup Words", numberedWords, wordIndex);
+
+        // === Now call the new function (backup/view mode) ===
+        int8_t selection = show_backup_menu(0, MENU_DISPLAY_WORDS, backup_words);
 
     } else if (choiceCount == 4 && selection == 2) {
         const char* confirmOptions[] = { "No", "Yes" };

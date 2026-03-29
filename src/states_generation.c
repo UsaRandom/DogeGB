@@ -4,12 +4,13 @@
 #include <gb/gb.h>
 #include <stdio.h>
 #include <string.h>
-#include <menu.h>
+#include "menu.h"
 #include <progress.h>
 #include "src/crypto/mnemonic.h"
 #include "src/crypto/hd_wallet.h"
 #include "src/crypto/secp256k1.h"
 #include "src/crypto/bip39_wordlist.h"
+#include "src/assets/nophotos.h"
 #include "states.h"
 #include "word_input.h"
 #include <bonktime.h>
@@ -29,79 +30,27 @@ extern unsigned char seed[64];
 extern unsigned char privkey[32];
 extern unsigned char pubkey[33];
 extern char address[35];
+extern uint8_t test_streak;
 
 extern uint8_t current_mode;
 
 extern uint8_t current_slot;
 extern wallet current_wallet;
 
-static uint8_t last_test_word = 255;
-static uint8_t test_streak = 0;
 static int8_t wordSelection = 0;
 
-void handle_bonktime_entropy(void) BANKED {
-   
-    uint8_t* entropy = bonktime(BONKTIME_ENTROPY_MODE);
-    
-    if(entropy == NULL) {
-        current_state = STATE_GEN_TYPE_SELECTION;
-        return;
-    }
-
-
-    
-    fill_bkg_rect(0, 0, 20, 18, 0);
-
-    char wait[19] = "Generating Words  \0";
-    gotoxy(2,8);
-    printf(wait);
-
-
-    generate_mnemonic(words);
-
-    
-
-    current_state = STATE_SHOW_GENERATED_WORDS;
-}
 
 void handle_show_generated_words(void) BANKED {
-    char title_backup[16];
-    char create_opt[16];
     char title_cancel[8];
     char opt_no[4];
     char opt_yes[4];
-    strcpy(title_backup, "Backup Words");
-    strcpy(create_opt, "[Create Wallet]");
     strcpy(title_cancel, "Cancel?");
     strcpy(opt_no, "No");
     strcpy(opt_yes, "Yes");
 
-    char numbered[12][16];
-    const char* wordMenu[13];
 
-    uint8_t all_filled = 1;
-    for (uint8_t i = 0; i < 12; i++) {
-        if (words[i][0] != '\0') {
-            if(i >= 9){
-                sprintf(numbered[i], "%u. %s", i + 1u, words[i]);
-            }
-            else {
-                sprintf(numbered[i], "%u.  %s", i + 1u, words[i]);
-            }
-        } else {
-            sprintf(numbered[i], "%u. ", i + 1u);
-            all_filled = 0;
-        }
-        wordMenu[i] = numbered[i];
-    }
-
-    uint8_t menu_count = 12;
-    if (all_filled) {
-        wordMenu[12] = create_opt;
-        menu_count = 13;
-    }
-
-    wordSelection = show_menu_with_start_pos(wordSelection, title_backup, wordMenu, menu_count);
+    //here words is a char[12][9], i need to send in a char**. so lets convert it.
+    wordSelection = show_backup_menu(wordSelection, MENU_NEW_WALLET_WORDS, words);
 
     if (wordSelection < 0) {
         const char* confirmOptions[] = { opt_no, opt_yes};
@@ -112,6 +61,14 @@ void handle_show_generated_words(void) BANKED {
         }
         wordSelection = 0;
         return;
+    }
+
+    uint8_t all_filled = 1;
+    for (uint8_t i = 0; i < 12; i++) {
+        if (words[i][0] != '\0') {
+        } else {
+            all_filled = 0;
+        }
     }
 
     if (all_filled && wordSelection == 12) {
@@ -132,98 +89,12 @@ void handle_show_generated_words(void) BANKED {
 }
 
 
-
-
-void handle_confirm_generated_words(void) BANKED {
-
-    if (test_streak >= 2) {
-        current_state = STATE_GENERATE_ADDRESS;
-        return;
-    }
-
-
-
-    uint8_t test_index = (DIV_REG + test_streak * 37u) % 12u;
-
-    while(last_test_word == test_index){
-        test_index = (DIV_REG + test_streak * 37u) % 12u;
-    }
-    
-    last_test_word = test_index;
-
-    char testBuffer[10][16];
-    const char* testOptions[10];
-    uint8_t correct_pos = (DIV_REG % 9u) + 1;
-
-    uint8_t used[10] = {0};
-    uint8_t placed = 0;
-
-    strcpy(testBuffer[correct_pos], words[test_index]);
-    testOptions[correct_pos] = testBuffer[correct_pos];
-    used[correct_pos] = 1;
-    placed++;
-
-    while (placed < 10) {
-        uint16_t rand_idx = ((uint16_t)DIV_REG << 8) | (LY_REG + placed);
-        uint16_t word_idx = rand_idx % 2048u;
-
-        get_bip39_word(word_idx, temp_buffer);
-
-        uint8_t is_duplicate = 0;
-        for (uint8_t i = 0; i < placed; i++) {
-            if (strcmp(testOptions[i], temp_buffer) == 0) {
-                is_duplicate = 1;
-                break;
-            }
-        }
-
-        if (!is_duplicate && strcmp(temp_buffer, words[test_index]) != 0) {
-            uint8_t pos;
-            do {
-                pos = (DIV_REG + placed) % 10u;
-            } while (used[pos]);
-
-            strcpy(testBuffer[pos], temp_buffer);
-            testOptions[pos] = testBuffer[pos];
-            used[pos] = 1;
-            placed++;
-        }
-    }
-
-    char title[32];
-    sprintf(title, "Enter Word #%u", test_index + 1u);
-
-    int8_t selection = show_menu(title, testOptions, 10u);
-
-    if (selection < 0) {
-        test_streak = 0;
-        current_state = STATE_SHOW_GENERATED_WORDS;
-        return;
-    }
-
-
-    if ((uint8_t)selection == correct_pos) {
-        test_streak++;
-    } else {
-        test_streak = 0;
-        current_state = STATE_SHOW_GENERATED_WORDS;
-    }
-
-}
-
-void wait_for_button(void) {
-    while (joypad() == 0) {
-        vsync();
-    }
-    waitpadup();
-}
-
 void handle_generate_address(void) BANKED {
     char mnemonic_str[109] = {0};
-   for (uint8_t i = 0; i < 12; i++) {
+    for (uint8_t i = 0; i < 12; i++) {
        if (i > 0) strcat(mnemonic_str, " ");
        strcat(mnemonic_str, words[i]);
-   }
+    }
 
     show_progress_page();
 
@@ -239,20 +110,22 @@ void handle_generate_address(void) BANKED {
 
     uint8_t local_seed[64];
     uint8_t local_privkey[32];
-    char    local_address[35];
-    char    local_pepeaddress[35];
-    char    local_bellsaddress[35];
+    uint8_t local_pubkey[33];
+    char    local_address[35];// = "DNQAyz6kPHUedoxpaUdHeXWPhgLa8bAFX4";
+    char    local_pepeaddress[35];// = "PqBraorEqyXRu5b5DPHaFnar4o36fuBBVY";
+    char    local_bellsaddress[35];// = "BMiA4ScJqPAGYeGPTNxhDu9TZA3rcdG7wg";
+
     mnemonic_to_seed(mnemonic_str, local_seed);
 
-    #ifndef __APPLE__
+    #ifndef TEST_MODE
     __asm__("di");
     #endif
 
-    seed_to_addresses(local_seed, local_address, local_pepeaddress, local_bellsaddress);
+    seed_to_addresses(local_seed, local_address, local_pepeaddress, local_bellsaddress, local_privkey, local_pubkey);
 
     if(!validate_checksum(local_address) || !validate_checksum(local_pepeaddress) || !validate_checksum(local_bellsaddress)) {
 
-        #ifndef __APPLE__
+        #ifndef TEST_MODE
         __asm__("ei");
         #endif
 
@@ -264,7 +137,7 @@ void handle_generate_address(void) BANKED {
         }
     }
 
-    #ifndef __APPLE__
+    #ifndef TEST_MODE
     __asm__("ei");
     #endif
 
@@ -272,7 +145,7 @@ void handle_generate_address(void) BANKED {
         case DOGEGB:
             strcpy(address, local_address);
         break;
-        case PEPEBG:
+        case PEPEGB:
             strcpy(address, local_pepeaddress);
             break;
         case BELLSGB:
@@ -282,24 +155,24 @@ void handle_generate_address(void) BANKED {
         break;
     }
 
-    #ifndef __APPLE__
+    #ifndef TEST_MODE
     __asm__("di");
     #endif
 
-    save_wallet(current_slot, local_address, local_pepeaddress, local_bellsaddress, mnemonic_str);
+    save_wallet(current_slot, local_address, local_pepeaddress, local_bellsaddress, mnemonic_str, local_privkey, local_pubkey);
 
-    #ifndef __APPLE__
+    #ifndef TEST_MODE
     __asm__("ei");
     #endif
 
-    #ifndef __APPLE__
+    #ifndef TEST_MODE
     __asm__("di");
     #endif
     
 
     get_wallet(current_slot, current_mode, &current_wallet);
 
-    #ifndef __APPLE__
+    #ifndef TEST_MODE
     __asm__("ei");
     #endif
 
