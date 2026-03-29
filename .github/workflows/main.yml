@@ -1,0 +1,77 @@
+name: Build ROMs & Compute SHA256 Hashes
+
+on:
+  push:
+    branches: [ pin ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: pin
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y make gcc python3-pip
+
+      - name: Install Python dependencies
+        run: |
+          python3 -m pip install mnemonic base58 bip32utils
+
+      - name: Download and setup GBDK 4.5.0 (clean extraction)
+        run: |
+          wget -q https://github.com/gbdk-2020/gbdk-2020/releases/download/4.5.0/gbdk-linux64.tar.gz -O gbdk.tar.gz
+          mkdir -p gbdk
+          tar -xzf gbdk.tar.gz -C gbdk --strip-components=1
+          chmod +x gbdk/bin/*
+          rm gbdk.tar.gz
+          echo "✅ GBDK ready — lcc at $(ls -l gbdk/bin/lcc)"
+
+      - name: Build all ROMs (make all)
+        run: make all
+
+      - name: Run automated test suite
+        run: make test
+
+      - name: Compute SHA256 hashes of all ROMs
+        run: |
+          echo "══════════════════════════════════════"
+          echo "✅ ROM BUILD COMPLETE — SHA256 HASHES:"
+          echo "══════════════════════════════════════"
+          echo "DogeGB.gb:"
+          sha256sum build/DogeGB.gb
+          echo ""
+          echo "PepeGB.gb:"
+          sha256sum build/PepeGB.gb
+          echo ""
+          echo "BellsGB.gb:"
+          sha256sum build/BellsGB.gb
+          echo "══════════════════════════════════════"
+          echo "Copy these three hashes for verification."
+
+      - name: Upload DogeGB ROM (individual)
+        uses: actions/upload-artifact@v4
+        with:
+          name: DogeGB.gb
+          path: build/DogeGB.gb
+          retention-days: 30
+
+      - name: Upload PepeGB ROM (individual)
+        uses: actions/upload-artifact@v4
+        with:
+          name: PepeGB.gb
+          path: build/PepeGB.gb
+          retention-days: 30
+
+      - name: Upload BellsGB ROM (individual)
+        uses: actions/upload-artifact@v4
+        with:
+          name: BellsGB.gb
+          path: build/BellsGB.gb
+          retention-days: 30

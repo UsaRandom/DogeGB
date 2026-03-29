@@ -138,8 +138,8 @@ build/%GB.gb: $(SRC) build/wallet_sram.o
 	$(CC) $(CFLAGS) $(OPTFLAGS) -o $@ $^
 	python3 tools/patch_bitrot.py $@
 
-doge: test assets savedata build/DogeGB.gb
-pepe: test assets savedata build/PepeGB.gb
-bells: test assets savedata build/BellsGB.gb
+doge: test savedata build/DogeGB.gb
+pepe: test savedata build/PepeGB.gb
+bells: test savedata build/BellsGB.gb
 
-all: clean test assets savedata build/DogeGB.gb build/PepeGB.gb build/BellsGB.gb postclean
+all: clean test savedata build/DogeGB.gb build/PepeGB.gb build/BellsGB.gb postclean
