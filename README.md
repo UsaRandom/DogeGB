@@ -2,38 +2,42 @@
 
 Game Boy's Cold Storage Wallet for Dogecoin, Pepecoin, and Bellscoin!
 
-
-https://github.com/user-attachments/assets/fb31d778-f8cc-49e6-b118-f0ea7d067f48
-
-
 ## Features
 
 - Generate BIP39 mnemonic phrases
 - Create Dogecoin, Pepecoin, & Bellscoin wallet addresses
-- Built-in entropy generation via Minigame
-- QR address display
-- Air-gapped operation
-- ROM integrity verification
+- QR Address Display
+- Built-in Entropy Generation via Minigame
+- Optional 6-Button PIN
+- Duress Silent Delete Code (PIN Backwards)
+- Encrypted Save Data
+- ROM Integrity Verification
+- Runtime Automated Test Suite
 
 
 ## Security Considerations
 
-### Platform Verification
-
+DogeGB is built to be used on **Air-Gapped Devices** only, meaning no internet. 
 
 Before using DogeGB to store crypto it is recommended to run the built-in test suite to verify the platform.
+
+Sensitive save data is encrypted using the PIN but it is only meant to keep out the overly curious and novice attackers.
+ 
+Deleting data may not prevent forensic recovery (flash cartridges are a black box).
+
+On certain emulators DogeGB may automatically increase Minigame play time to account for low input resolution.
+
 
 
 ### Healthy Practices
 
-Treat this like a paper wallet. Backup words are not encrypted on device and deleting the backup words won't necessarily prevent forensic recovery.
+Treat this like a paper wallet.
 
 That means:
 
 - Keep it physically secure
-- Keep cameras away from the screen
-- For Flash Cartridges, use a dedicated SD Card that never gets plugged into a computer again!
-
+- Keep cameras away from sensitive information
+- For flash cartridges, use a dedicated SD Card that never gets plugged into a computer again!
 
 
 ## Building
@@ -104,9 +108,6 @@ To test ROM integrity checks, you can corrupt a ROM (flip a random bit) by runni
 ```bash
 python3 tools/corrupt_rom.py ./build/DogeGB.gb
 ```
-
-
-
 
 
 

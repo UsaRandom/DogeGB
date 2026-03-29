@@ -14,7 +14,7 @@ static void crypt_slot(SaveSlot *slot, const uint8_t *key) {
     uint16_t lcg = (uint16_t)key[0] | ((uint16_t)key[1] << 8); 
 
     for (uint16_t i = 0; i < len; i++) {
-        data[i] ^= key[(uint8_t)(lcg & 0x1F)];
+        data[i] ^= (key[(uint8_t)(lcg & 0x1F)] ^ (uint8_t)(lcg >> 8));
         lcg = lcg * 5u + 1u;
     }
 }

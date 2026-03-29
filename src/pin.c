@@ -66,6 +66,7 @@ uint8_t display_pin_entry_screen(PinState pin_state, uint8_t attempts_left, uint
             uint16_t seconds_left = wait_time / 60;
             gotoxy(2, 9);
             printf("Try Again in %u ", seconds_left);
+            vsync_stir_entropy();
             wait_time--;
         }
     }
