@@ -1,4 +1,4 @@
-# DogeGB
+# DogeGB/PepeGB/BellsGB
 
 Game Boy's Cold Storage Wallet for Dogecoin, Pepecoin, and Bellscoin!
 
@@ -17,15 +17,15 @@ Game Boy's Cold Storage Wallet for Dogecoin, Pepecoin, and Bellscoin!
 
 ## Security Considerations
 
-DogeGB is built to be used on **Air-Gapped Devices** only, meaning no internet. 
+This is built to be used on **Air-Gapped Devices** only, meaning no internet. 
 
-Before using DogeGB to store crypto it is recommended to run the built-in test suite to verify the platform.
+Before using to store crypto it is recommended to run the built-in test suite to verify the platform.
 
 Sensitive save data is encrypted using the PIN but it is only meant to keep out the overly curious and novice attackers.
  
 Deleting data may not prevent forensic recovery (flash cartridges are a black box).
 
-On certain emulators DogeGB may automatically increase Minigame play time to account for low input resolution.
+On certain emulators it may automatically increase Minigame play time to account for low input resolution.
 
 
 
