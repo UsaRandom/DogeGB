@@ -120,8 +120,8 @@ assets:
 	./gbdk/bin/png2asset ./raw_assets/nophotos.png -map -noflip -tile_origin 150 -b 1 -o ./src/assets/nophotos.c
 
 test:
-	cd test && make
-	python3 test/test_crypto.py 30
+	cd test && make mnemonic_to_address && make sign_tx
+	python3 test/test_crypto.py --tests 30
 
 entropy:
 	python3 tools/generate_entropy.py
