@@ -1,3 +1,8 @@
+# Python
+companion/.venv/
+companion/__pycache__/
+companion/*.pyc
+
 # Build artifacts
 build/
 *.gb

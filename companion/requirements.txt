@@ -1,0 +1,4 @@
+PyQt6>=6.6.0
+opencv-python>=4.8.0
+pyserial>=3.5
+requests>=2.31.0
