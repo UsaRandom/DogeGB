@@ -10,8 +10,8 @@ import os
 import secrets
 import textwrap
 
-ENTROPY_POOL_SIZE = 512
-SALT_SIZE = 128
+ENTROPY_POOL_SIZE = 256
+SALT_SIZE = 64
 OUTPUT_DIR = "src/crypto"
 
 HEADER_FILE = "entropy_data.h"

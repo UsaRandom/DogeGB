@@ -1,4 +1,4 @@
-#pragma bank 6
+#pragma bank 8
 
 #include "tx_parser.h"
 #include "sha256.h"
@@ -7,12 +7,23 @@
 #include <string.h>
 #include <stdint.h>
 
+/* Divide hi:lo by 10 in-place; return remainder digit (0-9).
+   Works because rem < 10, so rem<<16 never overflows uint32_t. */
+static uint8_t div64_10(uint32_t *hi, uint32_t *lo) {
+    uint32_t r, mid, qm, low;
+    r    = *hi % 10u;  *hi = *hi / 10u;
+    mid  = (r << 16) | (*lo >> 16);
+    qm   = mid / 10u;  r   = mid % 10u;
+    low  = (r << 16) | (*lo & 0xFFFFu);
+    *lo  = (qm << 16) | (low / 10u);
+    return (uint8_t)(low % 10u);
+}
+
 // P2PKH version bytes: DOGE=0x1E, BELLS=0x19, PEPE=0x38
 static const uint8_t P2PKH_VER[3] = { 0x1E, 0x19, 0x38 };
 // P2SH version bytes:  DOGE=0x16, BELLS=0x05, PEPE=0x05
 static const uint8_t P2SH_VER[3]  = { 0x16, 0x05, 0x05 };
 
-static const char HEX_CHARS[] = "0123456789abcdef";
 
 static const char BASE58_ALPHA[] =
     "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
@@ -33,26 +44,6 @@ static uint32_t read_varint(const uint8_t *buf, uint16_t buf_len,
     *ok = 0; return 0;
 }
 
-// ---- hex helpers ----
-
-static void byte_to_hex(uint8_t b, char *out) {
-    out[0] = HEX_CHARS[b >> 4];
-    out[1] = HEX_CHARS[b & 0x0F];
-}
-
-// Format txid: display as big-endian (reversed), first 4 + "..." + last 4 hex chars
-// txid_le: 32 bytes little-endian (as stored in tx), out: "ab12cd34...ef56ab78\0" (18+1)
-// We do a shorter version: 4 hex chars + "..." + 4 hex chars = 11 chars + null
-static void format_txid(const uint8_t *txid_le, char *out) {
-    // txid display = big-endian = reverse of txid_le
-    // Show first 2 bytes BE (= last 2 bytes of LE) and last 2 bytes BE (= first 2 bytes of LE)
-    byte_to_hex(txid_le[31], out + 0);
-    byte_to_hex(txid_le[30], out + 2);
-    out[4] = '.'; out[5] = '.'; out[6] = '.';
-    byte_to_hex(txid_le[1],  out + 7);
-    byte_to_hex(txid_le[0],  out + 9);
-    out[11] = '\0';
-}
 
 // ---- base58check ----
 
@@ -110,49 +101,43 @@ static void hash160_to_addr(const uint8_t *hash160, uint8_t version, char *out) 
 }
 
 // ---- value formatting ----
-// val_le8: 8-byte little-endian satoshi value
-// Dogecoin/Pepecoin/Bellscoin use 8 decimal places
+// val_le8: 8-byte LE satoshi value → "X.XXX" (3 decimal places, no trailing zeros past 1st)
 static void format_value(const uint8_t *val_le8, char *out) {
-    // Reconstruct as two 32-bit halves (avoid full 64-bit division on SDCC)
     uint32_t lo = (uint32_t)val_le8[0]        | ((uint32_t)val_le8[1] << 8)
                 | ((uint32_t)val_le8[2] << 16) | ((uint32_t)val_le8[3] << 24);
     uint32_t hi = (uint32_t)val_le8[4]        | ((uint32_t)val_le8[5] << 8)
                 | ((uint32_t)val_le8[6] << 16) | ((uint32_t)val_le8[7] << 24);
 
-    // Convert to coins (divide by 100000000 = 1e8)
-    // Use 64-bit division — SDCC supports uint64_t
-    uint64_t satoshis = ((uint64_t)hi << 32) | lo;
-    uint64_t whole    = satoshis / 100000000ULL;
-    uint32_t frac     = (uint32_t)(satoshis % 100000000ULL);
+    /* Extract 18 decimal digits LSB-first; 8 are fractional, 10 are whole (max ~9.9B coins). */
+    char digits[18];
+    uint8_t i;
+    for (i = 0; i < 18u; i++)
+        digits[i] = (char)('0' + div64_10(&hi, &lo));
 
-    // Print whole part (simple itoa)
-    char tmp[20];
-    int tlen = 0;
-    if (whole == 0) {
-        tmp[tlen++] = '0';
-    } else {
-        uint64_t w = whole;
-        while (w > 0) { tmp[tlen++] = '0' + (w % 10); w /= 10; }
-        // reverse
-        for (int i = 0; i < tlen / 2; i++) {
-            char c = tmp[i]; tmp[i] = tmp[tlen-1-i]; tmp[tlen-1-i] = c;
-        }
-    }
-    memcpy(out, tmp, tlen);
-    out[tlen++] = '.';
+    /* digits[0..7]  = 8 fractional decimal places (LSB first)
+       digits[8..17] = up to 10 whole-coin digits (LSB first) */
 
-    // Print frac part, zero-padded to 8 digits, strip trailing zeros
-    char fstr[9];
-    for (int i = 7; i >= 0; i--) {
-        fstr[i] = '0' + (frac % 10);
-        frac /= 10;
+    /* Write whole part (digits[17..8] reversed, skip leading zeros) */
+    uint8_t olen = 0;
+    uint8_t leading = 1;
+    for (i = 18u; i > 8u; i--) {
+        if (leading && digits[i-1] == '0') continue;
+        leading = 0;
+        out[olen++] = digits[i-1];
     }
-    fstr[8] = '\0';
-    // strip trailing zeros (keep at least 2)
-    int flen = 8;
-    while (flen > 2 && fstr[flen-1] == '0') flen--;
-    memcpy(out + tlen, fstr, flen);
-    out[tlen + flen] = '\0';
+    if (olen == 0) out[olen++] = '0';
+
+    out[olen++] = '.';
+
+    /* Write 3 fractional digits (digits[7..5] reversed = 3 most-significant frac digits) */
+    out[olen++] = digits[7];
+    out[olen++] = digits[6];
+    out[olen++] = digits[5];
+
+    /* Strip trailing zeros, keep at least 1 */
+    while (olen > 0 && out[olen-1] == '0' && out[olen-2] != '.') olen--;
+
+    out[olen] = '\0';
 }
 
 // ---- script decoding ----
@@ -197,26 +182,23 @@ uint8_t parse_tx(const uint8_t *tx, uint16_t tx_len,
     if (pos + 4 > tx_len) return 0;
     pos += 4;
 
-    // input count
+    // input count — store count only, skip all input data
     uint32_t n_in = read_varint(tx, tx_len, &pos, &ok);
-    if (!ok || n_in == 0 || n_in > TX_MAX_INPUTS) return 0;
+    if (!ok || n_in == 0 || n_in > 255u) return 0;
     out->n_inputs = (uint8_t)n_in;
 
-    for (uint8_t i = 0; i < n_in; i++) {
-        // txid (32 bytes)
+    for (uint8_t i = 0; i < (uint8_t)n_in; i++) {
+        // txid (32 bytes) — skip
         if (pos + 32 > tx_len) return 0;
-        format_txid(tx + pos, out->inputs[i].txid);
         pos += 32;
-        // vout (4 bytes LE)
+        // vout (4 bytes) — skip
         if (pos + 4 > tx_len) return 0;
-        out->inputs[i].vout = (uint32_t)tx[pos]          | ((uint32_t)tx[pos+1] << 8)
-                            | ((uint32_t)tx[pos+2] << 16) | ((uint32_t)tx[pos+3] << 24);
         pos += 4;
-        // scriptSig (varint + data) — skip
+        // scriptSig — skip
         uint32_t sslen = read_varint(tx, tx_len, &pos, &ok);
         if (!ok || pos + sslen > tx_len) return 0;
         pos += (uint16_t)sslen;
-        // sequence (4 bytes)
+        // sequence (4 bytes) — skip
         if (pos + 4 > tx_len) return 0;
         pos += 4;
     }

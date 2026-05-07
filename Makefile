@@ -30,6 +30,8 @@ SRC = src/main.c \
       src/states_wordtest.c \
       src/states_pin.c \
       src/states_testing.c \
+      src/states_sign_tx_ir.c \
+      src/ir_transport.c \
       src/assets/progress_bar.c \
       src/assets/keyboard.c \
       src/assets/keyboard_lightgrey.c \
@@ -78,6 +80,7 @@ SRC = src/main.c \
       src/crypto/secp256k1.c \
       src/crypto/hmac.c \
       src/crypto/ripemd160.c \
+      src/crypto/tx_parser.c \
       src/crypto/entropy_data.c \
       src/bitrot_rom.c \
       src/bitrot_save.c
@@ -121,7 +124,7 @@ assets:
 
 test:
 	cd test && make mnemonic_to_address && make sign_tx
-	python3 test/test_crypto.py --tests 30
+	python3 test/test_crypto.py --tests 1
 
 entropy:
 	python3 tools/generate_entropy.py

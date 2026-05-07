@@ -1,4 +1,4 @@
-#pragma bank 6
+#pragma bank 8
 
 #include "tx_signer.h"
 #include "ecdsa.h"
@@ -8,9 +8,9 @@
 #include <string.h>
 #include <stdint.h>
 
-// Maximum unsigned tx size we'll handle
-#define MAX_TX_LEN      1280
-#define MAX_INPUTS      8
+// Cold-wallet limits: 4 inputs, 400-byte unsigned tx
+#define MAX_TX_LEN      400
+#define MAX_INPUTS      4
 #define MAX_SCRIPT_LEN  256
 
 // Static buffers (GBC has no dynamic allocation)

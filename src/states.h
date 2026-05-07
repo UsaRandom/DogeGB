@@ -24,7 +24,8 @@ typedef enum {
     STATE_WALLET_MENU,
     STATE_TESTING,
     STATE_SET_PIN,
-    STATE_ENTER_PIN
+    STATE_ENTER_PIN,
+    STATE_SIGN_TX_IR
 } AppState;
 
 #endif

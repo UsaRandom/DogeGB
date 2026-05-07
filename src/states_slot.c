@@ -23,7 +23,7 @@ static const char* dogeGBTitle = "DogeGB";
 static const char* bellsGBTitle = "BellsGB";
 static const char* pepeGBTitle = "PepeGB";
 
-void handle_slot_selection(void) {
+void handle_slot_selection(void) BANKED {
     char slot_display[MAX_SLOTS][SLOT_DISPLAY_LEN];
 
     list_slots(current_mode, slot_display);

@@ -59,7 +59,7 @@ char menu_strings[16][16];
 const char* menu_options[16];
 
 
-extern void handle_slot_selection(void);
+extern void handle_slot_selection(void) BANKED;
 extern void handle_gen_type_selection(void) BANKED;
 extern void handle_bonk_game(void) BANKED;
 extern void handle_word_entry(void) BANKED;
@@ -74,6 +74,7 @@ extern void handle_bonktime_entropy(void) BANKED;
 extern void handle_test_menu(void) BANKED;
 extern void handle_enter_pin(void) BANKED;
 extern void handle_set_pin(void) BANKED;
+extern void handle_sign_tx_ir(void) BANKED;
 
 
 extern uint8_t entropy_pool[ENTROPY_POOL_SIZE];
@@ -177,6 +178,10 @@ void main(void)
 
             case STATE_TESTING:
                 handle_test_menu();
+                break;
+
+            case STATE_SIGN_TX_IR:
+                handle_sign_tx_ir();
                 break;
 
             case STATE_IDLE:

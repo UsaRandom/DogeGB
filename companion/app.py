@@ -412,6 +412,7 @@ class DogeGBCompanion(QMainWindow):
         self.bridge: ArduinoBridge | None = None
         self.transport: ChunkedTransport | None = None
         self.last_signed_tx_hex: str = ""
+        self._send_stop: threading.Event = threading.Event()
 
         self._ui_queue: queue.Queue = queue.Queue()
         self._timer = QTimer()
@@ -675,6 +676,12 @@ class DogeGBCompanion(QMainWindow):
         self.send_btn.clicked.connect(self._on_send_proposal)
         btn_row.addWidget(self.send_btn)
 
+        self.cancel_send_btn = QPushButton("✕  Cancel send")
+        self.cancel_send_btn.setObjectName("secondary")
+        self.cancel_send_btn.setVisible(False)
+        self.cancel_send_btn.clicked.connect(self._on_cancel_send)
+        btn_row.addWidget(self.cancel_send_btn)
+
         self.receive_btn = QPushButton("↓  Receive signed tx")
         self.receive_btn.setObjectName("secondary")
         self.receive_btn.setEnabled(False)
@@ -865,9 +872,8 @@ class DogeGBCompanion(QMainWindow):
         if sel.change > 0:
             outputs.append(TxOutput(sel.change, self.watch_address.script_pubkey()))
 
-        proposal_payload = pack_tx_proposal(inputs, outputs)
-        envelope = pack_message(MSG_TX_PROPOSAL, proposal_payload)
-        unsigned_tx = serialize_unsigned_tx(inputs, outputs)
+        unsigned_tx = serialize_unsigned_tx(inputs, outputs, embed_prev_scripts=False)
+        envelope = pack_message(MSG_TX_PROPOSAL, unsigned_tx)
 
         self.last_proposal_bytes = envelope
         self.last_proposal_inputs = inputs
@@ -895,7 +901,7 @@ class DogeGBCompanion(QMainWindow):
         )
         summary = (
             f"  {len(inputs)} inputs  ·  {len(outputs)} outputs  ·  "
-            f"~{est_size} bytes signed  ·  proposal {len(proposal_payload)} bytes\n"
+            f"~{est_size} bytes signed  ·  proposal {len(unsigned_tx)} bytes\n"
             f"  → {recipient.original}: {format_doge(send_value)} DOGE"
             f"{change_line}{change_skip_line}{op_return_line}\n"
             f"  fee: {format_doge(sel.fee)} DOGE  "
@@ -908,7 +914,7 @@ class DogeGBCompanion(QMainWindow):
 
         self._log(
             f"Built proposal: {len(inputs)} in, {len(outputs)} out, "
-            f"{len(proposal_payload)} payload bytes (envelope {len(envelope)}).",
+            f"{len(unsigned_tx)} payload bytes (envelope {len(envelope)}).",
             "good",
         )
 
@@ -961,7 +967,7 @@ class DogeGBCompanion(QMainWindow):
             return
 
         self.bridge = bridge
-        self.transport = ChunkedTransport(bridge)
+        self.transport = ChunkedTransport(bridge, chunk_data_size=64)
         self._log("Bridge online — got PONG.", "good")
 
         def update_ui():
@@ -999,8 +1005,14 @@ class DogeGBCompanion(QMainWindow):
             return
         payload = self.last_proposal_bytes
         self._log(f"Sending {len(payload)} bytes (chunked) over IR…")
+        self._send_stop.clear()
         self.send_btn.setEnabled(False)
+        self._ui(lambda: self.cancel_send_btn.setVisible(True))
         threading.Thread(target=self._do_send, args=(payload,), daemon=True).start()
+
+    def _on_cancel_send(self):
+        self._send_stop.set()
+        self._log("Cancelling send…", "warn")
 
     def _do_send(self, payload: bytes):
         def progress(done, total):
@@ -1008,12 +1020,16 @@ class DogeGBCompanion(QMainWindow):
             self._log(f"  chunk {done}/{total} acked", "dim")
         try:
             assert self.transport is not None
-            self.transport.send_message(payload, progress=progress)
+            self.transport.send_message(payload, progress=progress, stop_event=self._send_stop)
             self._log("Proposal delivered. The GBC should now display it for confirmation.", "good")
         except TransportError as e:
-            self._log(f"Send failed: {e}", "err")
+            if self._send_stop.is_set():
+                self._log("Send cancelled.", "warn")
+            else:
+                self._log(f"Send failed: {e}", "err")
         finally:
             self._ui(lambda: self.send_btn.setEnabled(True))
+            self._ui(lambda: self.cancel_send_btn.setVisible(False))
             self._ui(lambda: self._set_progress(0))
 
     def _on_receive_signed(self):

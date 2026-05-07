@@ -4,8 +4,7 @@
 #include <stdint.h>
 #include <gb/gb.h>
 
-#define TX_MAX_INPUTS   8
-#define TX_MAX_OUTPUTS  8
+#define TX_MAX_OUTPUTS  4
 
 // Script type constants
 #define SCRIPT_P2PKH    0
@@ -13,25 +12,19 @@
 #define SCRIPT_OPRETURN 2
 #define SCRIPT_UNKNOWN  3
 
-// Per-input display info
-typedef struct {
-    char txid[12];      // "ab12...cd34\0"
-    uint32_t vout;
-} TxInputDisplay;
-
 // Per-output display info
 typedef struct {
     char addr[36];      // base58check or "OP_RETURN"
-    char value[14];     // "123456.78\0"
+    char value[14];     // "1234.567\0"
     uint8_t script_type;
 } TxOutputDisplay;
 
+// inputs[] removed — only the count is needed for display
 typedef struct {
-    uint8_t        n_inputs;
-    uint8_t        n_outputs;
-    TxInputDisplay inputs[TX_MAX_INPUTS];
+    uint8_t         n_inputs;
+    uint8_t         n_outputs;
     TxOutputDisplay outputs[TX_MAX_OUTPUTS];
-    uint8_t        valid; // 0 on parse error or unsupported script
+    uint8_t         valid;
 } ParsedTx;
 
 // coin_mode: 0=DOGE, 1=BELLS, 2=PEPE  (matches WALLET_MODE)

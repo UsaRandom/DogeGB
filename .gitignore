@@ -3,6 +3,9 @@ companion/.venv/
 companion/__pycache__/
 companion/*.pyc
 
+signing_wip/*
+ir example/*
+
 # Build artifacts
 build/
 *.gb

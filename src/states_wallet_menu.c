@@ -58,19 +58,21 @@ void handle_wallet_menu(void) BANKED {
 
     uint8_t hasMnemonic = (current_wallet.mnemonic[0] != '\0');
 
-    const char* walletMenu[4];
+    const char* walletMenu[5];
     uint8_t choiceCount;
 
     if (hasMnemonic) {
         walletMenu[0] = "Receive (QR)";
-        walletMenu[1] = "Display Words";
-        walletMenu[2] = "Delete Words";
-        walletMenu[3] = "Clear Slot";
-        choiceCount = 4u;
+        walletMenu[1] = "Sign TX (IR)";
+        walletMenu[2] = "Display Words";
+        walletMenu[3] = "Delete Words";
+        walletMenu[4] = "Clear Slot";
+        choiceCount = 5u;
     } else {
         walletMenu[0] = "Receive (QR)";
-        walletMenu[1] = "Clear Slot";
-        choiceCount = 2u;
+        walletMenu[1] = "Sign TX (IR)";
+        walletMenu[2] = "Clear Slot";
+        choiceCount = 3u;
     }
 
     int8_t selection = show_menu(menuTitle, walletMenu, choiceCount);
@@ -81,7 +83,6 @@ void handle_wallet_menu(void) BANKED {
     }
 
     if (selection == 0) {
-
             VBK_REG = 1; fill_bkg_rect(0, 0, 20, 3, 0); VBK_REG = 0;
             cls();
 
@@ -100,10 +101,14 @@ void handle_wallet_menu(void) BANKED {
             init_draw();
         return;
     }
-    
 
-    if (choiceCount == 4 && selection == 1) {
-        char backup_words[12][9] = {{0}}; 
+    if (selection == 1) {
+        current_state = STATE_SIGN_TX_IR;
+        return;
+    }
+
+    if (choiceCount == 5 && selection == 2) {
+        char backup_words[12][9] = {{0}};
         const char* src = current_wallet.mnemonic;
         uint8_t i = 0;
 
@@ -121,10 +126,9 @@ void handle_wallet_menu(void) BANKED {
             while (*src == ' ') src++;
         }
 
-        // === Now call the new function (backup/view mode) ===
         int8_t selection = show_backup_menu(0, MENU_DISPLAY_WORDS, backup_words);
 
-    } else if (choiceCount == 4 && selection == 2) {
+    } else if (choiceCount == 5 && selection == 3) {
         const char* confirmOptions[] = { "No", "Yes" };
         int8_t confirm = show_menu("Delete Words?", confirmOptions, 2u);
         if (confirm == 1) {
@@ -132,8 +136,8 @@ void handle_wallet_menu(void) BANKED {
             get_wallet(current_wallet.slotNum, current_mode, &current_wallet);
         }
 
-    } else if ((choiceCount == 4 && selection == 3) ||
-                (choiceCount == 2 && selection == 1)) {
+    } else if ((choiceCount == 5 && selection == 4) ||
+                (choiceCount == 3 && selection == 2)) {
         const char* confirmOptions[] = { "No", "Yes" };
         int8_t confirm = show_menu("Clear Slot?", confirmOptions, 2u);
         if (confirm == 1) {

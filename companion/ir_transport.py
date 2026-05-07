@@ -64,7 +64,7 @@ import time
 import zlib
 from dataclasses import dataclass
 from queue import Empty, Queue
-from typing import Callable, Optional
+from typing import Callable, Optional, Union
 
 log = logging.getLogger("ir_transport")
 
@@ -84,10 +84,10 @@ CHUNK_CRC_SIZE = 4
 MAX_CHUNK_DATA = 192
 
 # Timing
-DEFAULT_ACK_TIMEOUT_MS = 1500       # how long to wait for an ACK after a DATA chunk
+DEFAULT_ACK_TIMEOUT_MS = 800        # how long to wait for an ACK after a DATA chunk
 DEFAULT_RX_TIMEOUT_MS = 30_000      # how long to listen when expecting incoming
 MAX_CHUNK_RETRIES = 4
-INTER_CHUNK_BACKOFF_S = 0.10        # short pause between retries
+INTER_CHUNK_BACKOFF_S = 0.011       # 11ms — prime offset from GBC's 3ms delay
 
 
 # --- CRC + chunk codec ----------------------------------------------------
@@ -293,12 +293,14 @@ class ChunkedTransport:
         self,
         payload: bytes,
         progress: Optional[Callable[[int, int], None]] = None,
+        stop_event: Optional[threading.Event] = None,
     ):
         """
         Sends `payload` as a sequence of DATA chunks. After each chunk, waits
-        for an ACK with matching seq. Retries on NACK / corruption / timeout.
+        for an ACK with matching seq. Retries indefinitely until success or
+        stop_event is set.
 
-        Raises TransportError on persistent failure.
+        Raises TransportError on cancellation or unrecoverable error.
         """
         if len(payload) == 0:
             raise ValueError("won't send empty payload")
@@ -315,22 +317,26 @@ class ChunkedTransport:
             data = payload[seq * self.chunk_size : (seq + 1) * self.chunk_size]
             chunk = encode_chunk(Chunk(CHUNK_DATA, seq, n_chunks, data))
 
-            for attempt in range(MAX_CHUNK_RETRIES):
+            attempt = 0
+            while True:
+                if stop_event and stop_event.is_set():
+                    raise TransportError("cancelled")
+                attempt += 1
                 log.debug(
                     "TX chunk %d/%d (attempt %d, %d wire bytes)",
-                    seq + 1, n_chunks, attempt + 1, len(chunk),
+                    seq + 1, n_chunks, attempt, len(chunk),
                 )
                 resp = self.bridge.transmit_and_listen(
                     chunk, listen_ms=DEFAULT_ACK_TIMEOUT_MS
                 )
                 if resp is None:
-                    log.warning("no response for chunk %d (attempt %d)", seq, attempt + 1)
+                    log.warning("no ACK for chunk %d (attempt %d), retrying…", seq, attempt)
                     time.sleep(INTER_CHUNK_BACKOFF_S)
                     continue
                 try:
                     ack = decode_chunk(resp)
                 except FramingError as e:
-                    log.warning("framing error in ACK: %s", e)
+                    log.warning("framing error in ACK: %s — retrying…", e)
                     time.sleep(INTER_CHUNK_BACKOFF_S)
                     continue
                 if ack.type == CHUNK_ACK and ack.seq == seq:
@@ -340,14 +346,10 @@ class ChunkedTransport:
                     time.sleep(INTER_CHUNK_BACKOFF_S)
                     continue
                 log.warning(
-                    "unexpected response: type=0x%02x seq=%d (wanted ACK seq=%d)",
+                    "unexpected response: type=0x%02x seq=%d (wanted ACK seq=%d) — retrying…",
                     ack.type, ack.seq, seq,
                 )
                 time.sleep(INTER_CHUNK_BACKOFF_S)
-            else:
-                raise TransportError(
-                    f"chunk {seq + 1}/{n_chunks} failed after {MAX_CHUNK_RETRIES} retries"
-                )
 
             if progress:
                 progress(seq + 1, n_chunks)
