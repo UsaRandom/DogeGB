@@ -16,6 +16,8 @@ typedef struct {
     uint8_t  slotNum;
     char     address[ADDRESS_MAX_LEN + 1];
     char     mnemonic[MNEMONIC_MAX_LEN + 1];
+    uint8_t  private_key[PRIV_KEY_LEN];
+    uint8_t  public_key[PUB_KEY_LEN];
 } wallet;
 
 

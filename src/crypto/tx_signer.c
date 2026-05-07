@@ -4,19 +4,17 @@
 #include "ecdsa.h"
 #include "sha256.h"
 #include "ripemd160.h"
+#include "wram_arena.h"
 
 #include <string.h>
 #include <stdint.h>
 
-// Cold-wallet limits: 4 inputs, 400-byte unsigned tx
 #define MAX_TX_LEN      400
 #define MAX_INPUTS      4
-#define MAX_SCRIPT_LEN  256
 
-// Static buffers (GBC has no dynamic allocation)
-static uint8_t s_sighash_buf[MAX_TX_LEN + 32]; // preimage + SIGHASH_ALL word
-static uint8_t s_sigs[MAX_INPUTS][73];
-static uint8_t s_sig_lens[MAX_INPUTS];
+#define s_sighash_buf  g_arena.s.ts_sighash
+#define s_sigs         g_arena.s.ts_sigs
+#define s_sig_lens     g_arena.s.ts_sig_lens
 
 // ---- helpers ----
 
@@ -164,7 +162,7 @@ uint8_t sign_tx(const uint8_t *unsigned_tx, uint16_t tx_len,
         uint16_t preimage_len = build_sighash_preimage(
             unsigned_tx, tx_len, i,
             signing_script, 25,
-            s_sighash_buf, (uint16_t)sizeof(s_sighash_buf));
+            s_sighash_buf, (uint16_t)sizeof(g_arena.s.ts_sighash));
         if (!preimage_len) return 0;
 
         // double-SHA256
@@ -229,3 +227,7 @@ uint8_t sign_tx(const uint8_t *unsigned_tx, uint16_t tx_len,
     *out_len = wpos;
     return 1;
 }
+
+#undef s_sighash_buf
+#undef s_sigs
+#undef s_sig_lens

@@ -52,10 +52,12 @@ const int   IR_LED_PIN          = 2;
 const int   IR_SENSOR_PIN       = A6;
 const long  USB_BAUD            = 115200;
 
-// Receive tuning. The GBC sends bytes back-to-back with a ~5ms inter-byte
-// gap (start bit takes ~3.5ms, terminator + gap another ~5ms), so once the
-// first byte arrives we treat ~250ms of silence as "chunk complete".
-const unsigned long INTERBYTE_TIMEOUT_MS = 250;
+// Receive tuning. The GBC sends bytes with a ~6ms inter-byte gap (terminator
+// pulse + delay_3ms×2). INTERBYTE_TIMEOUT must be greater than 6ms (so we
+// don't split a live chunk) but short enough that the Arduino declares the
+// chunk complete before the GBC times out waiting for its ACK (~36ms on CGB
+// double-speed). 30ms satisfies both constraints with comfortable margin.
+const unsigned long INTERBYTE_TIMEOUT_MS = 30;
 
 // Maximum chunk payload supported. The Python transport uses 64-byte data
 // chunks by default; the framed chunk on the wire is always under 256 bytes

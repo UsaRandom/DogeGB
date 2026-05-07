@@ -362,7 +362,7 @@ uint8_t ir_send_message(uint8_t msg_type, const uint8_t *payload,
         uint8_t ack_seq, ack_total, ack_dlen;
         uint8_t ack_data[4];
         uint8_t ack_type = recv_one_chunk(&ack_seq, &ack_total,
-                                          ack_data, &ack_dlen, 20000U);
+                                          ack_data, &ack_dlen, 65000U);
         if (ack_type != IR_CHUNK_ACK || ack_seq != seq) return IR_TIMEOUT;
     }
 

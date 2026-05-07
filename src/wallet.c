@@ -119,6 +119,8 @@ void get_wallet(uint8_t slot, uint8_t mode, wallet *out) {
     out->slotNum = slot;
     strncpy(out->address,  target_addr, ADDRESS_MAX_LEN + 1);
     strncpy(out->mnemonic, temp.mnemonic, MNEMONIC_MAX_LEN + 1);
+    memcpy(out->private_key, temp.private_key, PRIV_KEY_LEN);
+    memcpy(out->public_key,  temp.public_key,  PUB_KEY_LEN);
 }
 
 void clear_slot(uint8_t slot) {

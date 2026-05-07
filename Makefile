@@ -81,6 +81,9 @@ SRC = src/main.c \
       src/crypto/hmac.c \
       src/crypto/ripemd160.c \
       src/crypto/tx_parser.c \
+      src/crypto/tx_signer.c \
+      src/crypto/ecdsa.c \
+      src/crypto/wram_arena.c \
       src/crypto/entropy_data.c \
       src/bitrot_rom.c \
       src/bitrot_save.c

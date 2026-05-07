@@ -8,7 +8,8 @@ CRYPTO_SRC = ../src/crypto/mnemonic.c ../src/crypto/hd_wallet.c ../src/crypto/pb
              ../src/crypto/bip39_words_1.c ../src/crypto/bip39_words_2.c \
              ../src/crypto/entropy_data.c \
              ../src/crypto/endian.c ../src/crypto/hmac.c \
-             ../src/crypto/sha512_constants.c ../src/crypto/sha512_transform.c progress.c
+             ../src/crypto/sha512_constants.c ../src/crypto/sha512_transform.c \
+             ../src/crypto/wram_arena.c progress.c
 
 TX_SRC = ../src/crypto/ecdsa.c ../src/crypto/tx_parser.c ../src/crypto/tx_signer.c
 

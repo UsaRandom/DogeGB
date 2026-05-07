@@ -6,6 +6,8 @@ companion/*.pyc
 signing_wip/*
 ir example/*
 
+a.out
+
 # Build artifacts
 build/
 *.gb

@@ -413,6 +413,7 @@ class DogeGBCompanion(QMainWindow):
         self.transport: ChunkedTransport | None = None
         self.last_signed_tx_hex: str = ""
         self._send_stop: threading.Event = threading.Event()
+        self._receive_stop: threading.Event = threading.Event()
 
         self._ui_queue: queue.Queue = queue.Queue()
         self._timer = QTimer()
@@ -687,6 +688,12 @@ class DogeGBCompanion(QMainWindow):
         self.receive_btn.setEnabled(False)
         self.receive_btn.clicked.connect(self._on_receive_signed)
         btn_row.addWidget(self.receive_btn)
+
+        self.cancel_receive_btn = QPushButton("✕  Cancel receive")
+        self.cancel_receive_btn.setObjectName("secondary")
+        self.cancel_receive_btn.setVisible(False)
+        self.cancel_receive_btn.clicked.connect(self._on_cancel_receive)
+        btn_row.addWidget(self.cancel_receive_btn)
 
         self.broadcast_btn = QPushButton("↗  Broadcast")
         self.broadcast_btn.setObjectName("secondary")
@@ -1035,30 +1042,48 @@ class DogeGBCompanion(QMainWindow):
     def _on_receive_signed(self):
         if self.transport is None:
             return
-        self._log("Listening for signed tx from GBC… (sign on the GBC, then transmit)")
+        self._receive_stop.clear()
         self.receive_btn.setEnabled(False)
+        self._ui(lambda: self.cancel_receive_btn.setVisible(True))
         threading.Thread(target=self._do_receive, daemon=True).start()
+
+    def _on_cancel_receive(self):
+        self._receive_stop.set()
+        self._log("Cancelling receive…", "warn")
 
     def _do_receive(self):
         try:
             assert self.transport is not None
-            payload = self.transport.receive_message(first_chunk_timeout_ms=120_000)
-            msg_type, body = unpack_message(payload)
-            if msg_type != MSG_SIGNED_TX:
-                self._log(f"Got message type 0x{msg_type:02x}, expected SIGNED_TX.", "warn")
+            while not self._receive_stop.is_set():
+                self._log("Listening for signed tx from GBC… (sign on the GBC, then transmit)")
+                try:
+                    payload = self.transport.receive_message(first_chunk_timeout_ms=5_000)
+                except TransportError as e:
+                    self._log(f"Receive failed: {e}", "err")
+                    continue
+
+                try:
+                    msg_type, body = unpack_message(payload)
+                except Exception as e:
+                    self._log(f"Decode failed: {e}", "err")
+                    continue
+
+                if msg_type != MSG_SIGNED_TX:
+                    self._log(f"Got message type 0x{msg_type:02x}, expected SIGNED_TX.", "warn")
+                    continue
+
+                self.last_signed_tx_hex = body.hex()
+                self._log(
+                    f"Got signed tx: {len(body)} bytes — {self.last_signed_tx_hex[:60]}…",
+                    "good",
+                )
+                self._ui(lambda: self.broadcast_btn.setEnabled(True))
                 return
-            self.last_signed_tx_hex = body.hex()
-            self._log(
-                f"Got signed tx: {len(body)} bytes — {self.last_signed_tx_hex[:60]}…",
-                "good",
-            )
-            self._ui(lambda: self.broadcast_btn.setEnabled(True))
-        except TransportError as e:
-            self._log(f"Receive failed: {e}", "err")
-        except Exception as e:
-            self._log(f"Decode failed: {e}", "err")
+
+            self._log("Receive cancelled.", "warn")
         finally:
             self._ui(lambda: self.receive_btn.setEnabled(True))
+            self._ui(lambda: self.cancel_receive_btn.setVisible(False))
 
     def _on_broadcast(self):
         if not self.last_signed_tx_hex:

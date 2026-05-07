@@ -9,6 +9,7 @@
 #include "mnemonic.h"
 #include "entropy_data.h"
 #include "hmac.h"
+#include "wram_arena.h"
 
 // Extern declaration for entropy pool
 extern uint8_t entropy_pool[ENTROPY_POOL_SIZE];
@@ -83,7 +84,7 @@ void generate_mnemonic(char words[12][9]) BANKED {
 
 void mnemonic_to_seed(const char *mnemonic, uint8_t *seed) BANKED {
     const char *salt_prefix = "mnemonic";
-    static uint8_t salt[128]; 
+    uint8_t *salt = g_arena.w.mnemonic_salt;
 
     uint8_t salt_len = my_strlen(salt_prefix);
     my_memcpy(salt, (const uint8_t*)salt_prefix, salt_len);

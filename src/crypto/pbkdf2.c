@@ -1,27 +1,28 @@
 #pragma bank 3
 #include "pbkdf2.h"
 #include "sha512.h"
+#include "wram_arena.h"
 #include <string.h>
 #include <stdio.h>
 #include "progress.h"
 
 extern uint8_t crypto_debug;
 
-// Static buffers to avoid stack overflow
-static uint8_t u[SHA512_HASH_LENGTH];
-static uint8_t k_ipad[128];
-static uint8_t k_opad[128];
-static uint8_t tk[SHA512_HASH_LENGTH];
-// Only store the 64-byte state snapshots, not full SHA512_CTX (saves 288 bytes vs 2×SHA512_CTX)
-static uint8_t inner_state_init[64];
-static uint8_t outer_state_init[64];
-static SHA512_CTX ctx_inner, ctx_outer;
-static uint8_t salt_block[132];
+/* All large buffers live in g_arena.w (wallet-gen side).
+   Aliases to reduce verbosity. */
+#define u                g_arena.w.pbkdf2_u
+#define k_ipad           g_arena.w.pbkdf2_k_ipad
+#define k_opad           g_arena.w.pbkdf2_k_opad
+#define tk               g_arena.w.pbkdf2_tk
+#define inner_state_init g_arena.w.pbkdf2_inner_state
+#define outer_state_init g_arena.w.pbkdf2_outer_state
+#define ctx_inner        g_arena.w.pbkdf2_ctx_inner
+#define ctx_outer        g_arena.w.pbkdf2_ctx_outer
+#define salt_block       g_arena.w.pbkdf2_salt_block
 
 void pbkdf2_hmac_sha512(uint8_t *out, const uint8_t *password, uint32_t password_len, const uint8_t *salt, uint32_t salt_len, uint32_t iterations) BANKED {
     register uint32_t i;
 
-    // Prepare key (password)
     const uint8_t *key = password;
     uint32_t key_len = password_len;
 
@@ -33,39 +34,35 @@ void pbkdf2_hmac_sha512(uint8_t *out, const uint8_t *password, uint32_t password
         key_len = SHA512_HASH_LENGTH;
     }
 
-    // Precompute inner padding
     memset(k_ipad, 0x36, 128);
     for (i = 0; i < key_len; i++) k_ipad[i] ^= key[i];
 
-    // Precompute outer padding
     memset(k_opad, 0x5c, 128);
     for (i = 0; i < key_len; i++) k_opad[i] ^= key[i];
 
-    // Capture inner state after processing k_ipad (reuse ctx_inner as temporary)
+    /* Save the state snapshot after processing k_ipad */
     sha512_init(&ctx_inner);
     sha512_update(&ctx_inner, k_ipad, 128);
     memcpy(inner_state_init, &ctx_inner.state, 64);
 
-    // Capture outer state after processing k_opad (reuse ctx_outer as temporary)
     sha512_init(&ctx_outer);
     sha512_update(&ctx_outer, k_opad, 128);
     memcpy(outer_state_init, &ctx_outer.state, 64);
 
-    // Block 1 (BIP39 only needs 1 block of 64 bytes output)
     memcpy(salt_block, salt, salt_len);
     salt_block[salt_len] = 0;
     salt_block[salt_len+1] = 0;
     salt_block[salt_len+2] = 0;
     salt_block[salt_len+3] = 1;
 
-    // U1 = PRF(P, S || 1)
+    /* U1 */
     memcpy(&ctx_inner.state, inner_state_init, 64);
-    ctx_inner.count[0] = 1024; // 128 bytes * 8 bits
+    ctx_inner.count[0] = 1024;
     ctx_inner.count[1] = 0;
     memset(ctx_inner.buffer, 0, 128);
     sha512_update(&ctx_inner, salt_block, salt_len + 4);
     sha512_final(&ctx_inner, u);
-    // Outer hash
+
     memcpy(&ctx_outer.state, outer_state_init, 64);
     ctx_outer.count[0] = 1024;
     ctx_outer.count[1] = 0;
@@ -73,14 +70,11 @@ void pbkdf2_hmac_sha512(uint8_t *out, const uint8_t *password, uint32_t password
     sha512_update(&ctx_outer, u, SHA512_HASH_LENGTH);
     sha512_final(&ctx_outer, u);
 
-    // Copy U1 to result
     memcpy(out, u, SHA512_HASH_LENGTH);
 
     add_progress(WEIGHT_PBKDF2);
 
-    // Loop for remaining iterations
     for (i = 1; i < iterations; i++) {
-        // Inner hash
         memcpy(&ctx_inner.state, inner_state_init, 64);
         ctx_inner.count[0] = 1024;
         ctx_inner.count[1] = 0;
@@ -88,7 +82,6 @@ void pbkdf2_hmac_sha512(uint8_t *out, const uint8_t *password, uint32_t password
         sha512_update(&ctx_inner, u, SHA512_HASH_LENGTH);
         sha512_final(&ctx_inner, u);
 
-        // Outer hash
         memcpy(&ctx_outer.state, outer_state_init, 64);
         ctx_outer.count[0] = 1024;
         ctx_outer.count[1] = 0;
@@ -96,7 +89,7 @@ void pbkdf2_hmac_sha512(uint8_t *out, const uint8_t *password, uint32_t password
         sha512_update(&ctx_outer, u, SHA512_HASH_LENGTH);
         sha512_final(&ctx_outer, u);
 
-        // XOR into result - FULLY unrolled 64-byte XOR (no loop)
+        /* XOR into result — unrolled 64-byte XOR */
         out[0] ^= u[0]; out[1] ^= u[1]; out[2] ^= u[2]; out[3] ^= u[3];
         out[4] ^= u[4]; out[5] ^= u[5]; out[6] ^= u[6]; out[7] ^= u[7];
         out[8] ^= u[8]; out[9] ^= u[9]; out[10] ^= u[10]; out[11] ^= u[11];
@@ -117,3 +110,13 @@ void pbkdf2_hmac_sha512(uint8_t *out, const uint8_t *password, uint32_t password
         add_progress(WEIGHT_PBKDF2);
     }
 }
+
+#undef u
+#undef k_ipad
+#undef k_opad
+#undef tk
+#undef inner_state_init
+#undef outer_state_init
+#undef ctx_inner
+#undef ctx_outer
+#undef salt_block
