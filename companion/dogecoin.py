@@ -284,11 +284,12 @@ def select_coins_greedy(
     fee_rate_koinu_per_byte: int,
     has_op_return: bool = False,
     op_return_len: int = 0,
+    op_return_value: int = 0,
     recipient_is_p2sh: bool = False,
     dust_threshold: int = 1_000_000,  # 0.01 DOGE — well above relay dust
 ) -> CoinSelection:
     """
-    Pick UTXOs (largest first) until we cover send_value + estimated fee.
+    Pick UTXOs (largest first) until we cover send_value + op_return_value + fee.
     Returns a change amount; if change < dust, the leftover is added to the
     fee instead of being a tiny dust output.
 
@@ -296,6 +297,9 @@ def select_coins_greedy(
     """
     if send_value <= 0:
         raise ValueError("send_value must be positive")
+
+    # Total value leaving the wallet (excluding fee, which comes from change)
+    total_spend = send_value + op_return_value
 
     # Sort largest first
     sorted_utxos = sorted(utxos, key=lambda u: u["value"], reverse=True)
@@ -317,8 +321,8 @@ def select_coins_greedy(
             op_return_len=op_return_len if has_op_return else 0,
         )
         fee_no_change = size_no_change * fee_rate_koinu_per_byte
-        if total_in == send_value + fee_no_change:
-            return CoinSelection(chosen, total_in, send_value, fee_no_change, 0)
+        if total_in == total_spend + fee_no_change:
+            return CoinSelection(chosen, total_in, total_spend, fee_no_change, 0)
 
         # With change (always P2PKH back to source)
         size_with_change = estimate_signed_tx_size(
@@ -328,20 +332,20 @@ def select_coins_greedy(
             op_return_len=op_return_len if has_op_return else 0,
         )
         fee_with_change = size_with_change * fee_rate_koinu_per_byte
-        change = total_in - send_value - fee_with_change
+        change = total_in - total_spend - fee_with_change
 
         if change >= dust_threshold:
             return CoinSelection(
-                chosen, total_in, send_value + change, fee_with_change, change
+                chosen, total_in, total_spend + change, fee_with_change, change
             )
-        if total_in >= send_value + fee_no_change and change < dust_threshold:
+        if total_in >= total_spend + fee_no_change and change < dust_threshold:
             # Skip the change output; the would-be-change becomes extra fee
             return CoinSelection(
-                chosen, total_in, send_value, total_in - send_value, 0
+                chosen, total_in, total_spend, total_in - total_spend, 0
             )
 
     raise InsufficientFundsError(
-        f"Need at least {send_value + fee_no_change} koinu but only "
+        f"Need at least {total_spend + fee_no_change} koinu but only "
         f"{total_in} available"
     )
 

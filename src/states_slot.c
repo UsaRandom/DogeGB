@@ -38,7 +38,7 @@ void handle_slot_selection(void) BANKED {
         gameTitle = "[BELL RING!]\0";
     }
     
-    const char* menu_options[MAX_SLOTS + 5] = {
+    const char* menu_options[MAX_SLOTS + 6] = {
         slot_display[0],
         slot_display[1],
         slot_display[2],
@@ -51,7 +51,8 @@ void handle_slot_selection(void) BANKED {
         gameTitle,
         "",
         "[Set PIN]",
-        "[Run Tests]"
+        "[Run Tests]",
+        "[Test IR]"
     };
 
 
@@ -72,7 +73,7 @@ void handle_slot_selection(void) BANKED {
     }
     
 
-    int8_t slot = show_menu(title, menu_options, MAX_SLOTS + 5);
+    int8_t slot = show_menu(title, menu_options, MAX_SLOTS + 6);
     if (slot >= 0 && slot < MAX_SLOTS) {
         current_slot = slot + 1;
 
@@ -107,6 +108,10 @@ void handle_slot_selection(void) BANKED {
         if(answer == 1) {
             current_state = STATE_TESTING;
         }
+    }
+
+    if(slot == MAX_SLOTS + 5) {
+        current_state = STATE_IR_TEST;
     }
 
     if(slot == -2){

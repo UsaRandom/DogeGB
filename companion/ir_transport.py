@@ -356,10 +356,17 @@ class ChunkedTransport:
 
     # -- Receive --------------------------------------------------------
 
-    def receive_message(self, first_chunk_timeout_ms: int = DEFAULT_RX_TIMEOUT_MS) -> bytes:
+    def receive_message(
+        self,
+        first_chunk_timeout_ms: int = DEFAULT_RX_TIMEOUT_MS,
+        progress: Optional[Callable[[int, int], None]] = None,
+    ) -> bytes:
         """
         Listens for incoming chunks, ACKs each, reassembles, and returns the
         full payload. Raises TransportError on timeout or persistent corruption.
+
+        progress(done, total) is called after each chunk is ACKed, matching the
+        same signature as send_message's progress callback.
         """
         chunks: dict = {}
         total: Optional[int] = None
@@ -393,6 +400,8 @@ class ChunkedTransport:
                 total = ch.total
                 if total == 0 or total > 255:
                     raise TransportError(f"invalid total in first chunk: {total}")
+                if progress:
+                    progress(0, total)
             elif ch.total != total:
                 log.warning(
                     "chunk reports total=%d but first chunk said %d", ch.total, total
@@ -403,6 +412,9 @@ class ChunkedTransport:
             ack = encode_chunk(Chunk(CHUNK_ACK, ch.seq, 0, b""))
             # Short listen window after ACK so we can immediately catch the next data chunk
             self.bridge.transmit_and_listen(ack, listen_ms=200)
+
+            if progress:
+                progress(len(chunks), total)
 
             if len(chunks) == total:
                 break

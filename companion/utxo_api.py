@@ -21,8 +21,10 @@ Providers (no API key required):
   - Chainz CryptoID   https://chainz.cryptoid.info/doge/api.dws
   - Tatum (community)? — skipped, requires key
 
-Broadcast endpoints supported:
-  - BlockCypher /v1/doge/main/txs/push
+Broadcast endpoints supported (tried in order):
+  - SoChain      https://chain.so/api/v2/send_tx/DOGE
+  - Blockchair   https://api.blockchair.com/dogecoin/push/transaction
+  - BlockCypher  /v1/doge/main/txs/push
   - Chainz CryptoID  ?q=pushtx
 """
 
@@ -243,7 +245,47 @@ def broadcast_chainz(tx_hex: str) -> str:
     raise BroadcastError(f"chainz unexpected response: {r.text[:300]}")
 
 
+def broadcast_sochain(tx_hex: str) -> str:
+    url = "https://chain.so/api/v2/send_tx/DOGE"
+    log.info("sochain: POST %s", url)
+    r = requests.post(
+        url,
+        json={"tx_hex": tx_hex},
+        headers={"User-Agent": USER_AGENT},
+        timeout=DEFAULT_TIMEOUT,
+    )
+    if r.status_code != 200:
+        raise BroadcastError(f"sochain push HTTP {r.status_code}: {r.text[:300]}")
+    data = r.json()
+    if data.get("status") != "success":
+        raise BroadcastError(f"sochain error: {data}")
+    txid = data.get("data", {}).get("txid")
+    if not txid:
+        raise BroadcastError(f"sochain response missing txid: {data}")
+    return txid
+
+
+def broadcast_blockchair(tx_hex: str) -> str:
+    url = "https://api.blockchair.com/dogecoin/push/transaction"
+    log.info("blockchair: POST %s", url)
+    r = requests.post(
+        url,
+        data={"data": tx_hex},
+        headers={"User-Agent": USER_AGENT},
+        timeout=DEFAULT_TIMEOUT,
+    )
+    if r.status_code != 200:
+        raise BroadcastError(f"blockchair push HTTP {r.status_code}: {r.text[:300]}")
+    data = r.json()
+    txid = data.get("data", {}).get("transaction_hash")
+    if not txid:
+        raise BroadcastError(f"blockchair response missing txid: {data}")
+    return txid
+
+
 BROADCASTERS = [
+    ("sochain", broadcast_sochain),
+    ("blockchair", broadcast_blockchair),
     ("blockcypher", broadcast_blockcypher),
     ("chainz", broadcast_chainz),
 ]

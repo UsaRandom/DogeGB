@@ -31,6 +31,7 @@ SRC = src/main.c \
       src/states_pin.c \
       src/states_testing.c \
       src/states_sign_tx_ir.c \
+      src/states_ir_test.c \
       src/ir_transport.c \
       src/assets/progress_bar.c \
       src/assets/keyboard.c \
@@ -127,7 +128,7 @@ assets:
 
 test:
 	cd test && make mnemonic_to_address && make sign_tx
-	python3 test/test_crypto.py --tests 1
+	python3 test/test_crypto.py --tests 10
 
 entropy:
 	python3 tools/generate_entropy.py

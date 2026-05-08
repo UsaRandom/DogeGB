@@ -75,6 +75,7 @@ extern void handle_test_menu(void) BANKED;
 extern void handle_enter_pin(void) BANKED;
 extern void handle_set_pin(void) BANKED;
 extern void handle_sign_tx_ir(void) BANKED;
+extern void handle_ir_test(void) BANKED;
 
 
 extern uint8_t entropy_pool[ENTROPY_POOL_SIZE];
@@ -182,6 +183,10 @@ void main(void)
 
             case STATE_SIGN_TX_IR:
                 handle_sign_tx_ir();
+                break;
+
+            case STATE_IR_TEST:
+                handle_ir_test();
                 break;
 
             case STATE_IDLE:

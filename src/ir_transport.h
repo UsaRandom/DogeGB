@@ -30,7 +30,7 @@
 #define IR_PROTO_ERROR  4
 
 /* Max data bytes per chunk (must match companion) */
-#define IR_MAX_CHUNK_DATA 64u
+#define IR_MAX_CHUNK_DATA 32u
 
 /*
  * Receive one complete application message.

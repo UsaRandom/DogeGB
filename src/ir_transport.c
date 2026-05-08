@@ -364,6 +364,15 @@ uint8_t ir_send_message(uint8_t msg_type, const uint8_t *payload,
         uint8_t ack_type = recv_one_chunk(&ack_seq, &ack_total,
                                           ack_data, &ack_dlen, 65000U);
         if (ack_type != IR_CHUNK_ACK || ack_seq != seq) return IR_TIMEOUT;
+
+        /* After sending the ACK, the Arduino (handleTxR) has a 40ms dead zone
+           before it starts listening for the next chunk, then a 200ms listen
+           window.  Total: ~280ms before the companion's bridge.listen() is
+           active.  Delay ~320ms so the next chunk arrives well after that
+           window expires and the companion is in a fresh listen() call. */
+        if ((uint8_t)(seq + 1u) < total_chunks) {
+            delay_80ms(); delay_80ms(); delay_80ms(); delay_80ms();
+        }
     }
 
     return IR_OK;

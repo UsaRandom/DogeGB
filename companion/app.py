@@ -44,6 +44,8 @@ from dogecoin import (
 )
 from ir_transport import ArduinoBridge, ChunkedTransport, TransportError
 from wire_format import (
+    MSG_PING,
+    MSG_PONG,
     MSG_SIGNED_TX,
     MSG_TX_PROPOSAL,
     pack_message,
@@ -414,6 +416,9 @@ class DogeGBCompanion(QMainWindow):
         self.last_signed_tx_hex: str = ""
         self._send_stop: threading.Event = threading.Event()
         self._receive_stop: threading.Event = threading.Event()
+        self._ir_test_stop: threading.Event = threading.Event()
+        self._ir_test_ok: int = 0
+        self._ir_test_err: int = 0
 
         self._ui_queue: queue.Queue = queue.Queue()
         self._timer = QTimer()
@@ -481,17 +486,15 @@ class DogeGBCompanion(QMainWindow):
 
             self.log_text.setTextCursor(cursor)
             self.log_text.ensureCursorVisible()
+            self.log_text.verticalScrollBar().setValue(
+                self.log_text.verticalScrollBar().maximum()
+            )
             self.log_text.setReadOnly(True)
 
         if threading.current_thread() is threading.main_thread():
             do()
         else:
             self._ui(do)
-
-    def _set_hex_box(self, box: QTextEdit, text: str):
-        box.setReadOnly(False)
-        box.setPlainText(text)
-        box.setReadOnly(True)
 
     def _set_progress(self, frac: float):
         self.progress.setValue(int(max(0.0, min(1.0, frac)) * 100))
@@ -615,27 +618,6 @@ class DogeGBCompanion(QMainWindow):
         self.review_summary.setWordWrap(True)
         layout.addWidget(self.review_summary)
 
-        tabs = QTabWidget()
-        layout.addWidget(tabs)
-
-        tab_wire = QWidget()
-        tw_layout = QVBoxLayout(tab_wire)
-        tw_layout.setContentsMargins(0, 0, 0, 0)
-        self.proposal_hex_box = QTextEdit()
-        self.proposal_hex_box.setReadOnly(True)
-        self.proposal_hex_box.setFixedHeight(130)
-        tw_layout.addWidget(self.proposal_hex_box)
-        tabs.addTab(tab_wire, "Wire (sent to GBC)")
-
-        tab_unsigned = QWidget()
-        tu_layout = QVBoxLayout(tab_unsigned)
-        tu_layout.setContentsMargins(0, 0, 0, 0)
-        self.unsigned_hex_box = QTextEdit()
-        self.unsigned_hex_box.setReadOnly(True)
-        self.unsigned_hex_box.setFixedHeight(130)
-        tu_layout.addWidget(self.unsigned_hex_box)
-        tabs.addTab(tab_unsigned, "Unsigned tx (Bitcoin format)")
-
         root.addWidget(p)
 
     def _build_transport_section(self, root: QVBoxLayout):
@@ -703,17 +685,37 @@ class DogeGBCompanion(QMainWindow):
 
         layout.addLayout(btn_row, 3, 0, 1, 3)
 
+        test_row = QHBoxLayout()
+        self.ir_test_btn = QPushButton("⟳  IR Test (ping-pong)")
+        self.ir_test_btn.setObjectName("secondary")
+        self.ir_test_btn.setEnabled(False)
+        self.ir_test_btn.clicked.connect(self._on_ir_test)
+        test_row.addWidget(self.ir_test_btn)
+
+        self.cancel_ir_test_btn = QPushButton("✕  Stop test")
+        self.cancel_ir_test_btn.setObjectName("secondary")
+        self.cancel_ir_test_btn.setVisible(False)
+        self.cancel_ir_test_btn.clicked.connect(self._on_cancel_ir_test)
+        test_row.addWidget(self.cancel_ir_test_btn)
+
+        self.ir_test_label = QLabel("")
+        self.ir_test_label.setStyleSheet(f"color: {TEXT_DIM}; font-size: 11px;")
+        test_row.addWidget(self.ir_test_label, 1)
+
+        layout.addLayout(test_row, 4, 0, 1, 3)
+
         self.progress = QProgressBar()
         self.progress.setMaximum(100)
         self.progress.setValue(0)
         self.progress.setFixedHeight(6)
         self.progress.setTextVisible(False)
-        layout.addWidget(self.progress, 4, 0, 1, 3)
+        layout.addWidget(self.progress, 5, 0, 1, 3)
 
         self.log_text = QTextEdit()
         self.log_text.setReadOnly(True)
-        self.log_text.setFixedHeight(160)
-        layout.addWidget(self.log_text, 5, 0, 1, 3)
+        self.log_text.setMinimumHeight(200)
+        self.log_text.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        layout.addWidget(self.log_text, 6, 0, 1, 3)
 
         root.addWidget(p)
 
@@ -856,6 +858,7 @@ class DogeGBCompanion(QMainWindow):
                 fee_rate_koinu_per_byte=fee_rate_koinu_per_byte,
                 has_op_return=bool(op_return_bytes),
                 op_return_len=len(op_return_bytes),
+                op_return_value=op_return_value,
                 recipient_is_p2sh=(recipient.address_type == "p2sh"),
             )
         except InsufficientFundsError as e:
@@ -916,14 +919,16 @@ class DogeGBCompanion(QMainWindow):
         )
         self.review_summary.setText(summary)
         self.review_summary.setStyleSheet(f"color: {TEXT}; font-size: 11px;")
-        self._set_hex_box(self.proposal_hex_box, envelope.hex())
-        self._set_hex_box(self.unsigned_hex_box, unsigned_tx.hex())
 
         self._log(
             f"Built proposal: {len(inputs)} in, {len(outputs)} out, "
             f"{len(unsigned_tx)} payload bytes (envelope {len(envelope)}).",
             "good",
         )
+        self._log(f"Unsigned tx hex ({len(unsigned_tx)} bytes):", "dim")
+        self._log(unsigned_tx.hex(), "dim")
+        self._log(f"Wire envelope hex ({len(envelope)} bytes):", "dim")
+        self._log(envelope.hex(), "dim")
 
         if self.transport is not None:
             self.send_btn.setEnabled(True)
@@ -974,7 +979,7 @@ class DogeGBCompanion(QMainWindow):
             return
 
         self.bridge = bridge
-        self.transport = ChunkedTransport(bridge, chunk_data_size=64)
+        self.transport = ChunkedTransport(bridge, chunk_data_size=32)
         self._log("Bridge online — got PONG.", "good")
 
         def update_ui():
@@ -985,6 +990,7 @@ class DogeGBCompanion(QMainWindow):
             if self.last_proposal_bytes is not None:
                 self.send_btn.setEnabled(True)
             self.receive_btn.setEnabled(True)
+            self.ir_test_btn.setEnabled(True)
         self._ui(update_ui)
 
     def _disconnect(self):
@@ -998,6 +1004,7 @@ class DogeGBCompanion(QMainWindow):
         self.send_btn.setEnabled(False)
         self.receive_btn.setEnabled(False)
         self.broadcast_btn.setEnabled(False)
+        self.ir_test_btn.setEnabled(False)
         self._log("Disconnected.", "dim")
 
     def _on_send_proposal(self):
@@ -1056,8 +1063,13 @@ class DogeGBCompanion(QMainWindow):
             assert self.transport is not None
             while not self._receive_stop.is_set():
                 self._log("Listening for signed tx from GBC… (sign on the GBC, then transmit)")
+                def progress(done, total):
+                    self._ui(lambda: self._set_progress(done / total if total else 0))
+                    self._log(f"  chunk {done}/{total} received", "dim")
                 try:
-                    payload = self.transport.receive_message(first_chunk_timeout_ms=5_000)
+                    payload = self.transport.receive_message(
+                        first_chunk_timeout_ms=5_000, progress=progress
+                    )
                 except TransportError as e:
                     self._log(f"Receive failed: {e}", "err")
                     continue
@@ -1074,9 +1086,11 @@ class DogeGBCompanion(QMainWindow):
 
                 self.last_signed_tx_hex = body.hex()
                 self._log(
-                    f"Got signed tx: {len(body)} bytes — {self.last_signed_tx_hex[:60]}…",
+                    f"Got signed tx: {len(body)} bytes",
                     "good",
                 )
+                self._log(f"Signed tx hex ({len(body)} bytes):", "dim")
+                self._log(self.last_signed_tx_hex, "dim")
                 self._ui(lambda: self.broadcast_btn.setEnabled(True))
                 return
 
@@ -1084,6 +1098,78 @@ class DogeGBCompanion(QMainWindow):
         finally:
             self._ui(lambda: self.receive_btn.setEnabled(True))
             self._ui(lambda: self.cancel_receive_btn.setVisible(False))
+            self._ui(lambda: self._set_progress(0))
+
+    def _on_ir_test(self):
+        if self.transport is None:
+            return
+        self._ir_test_stop.clear()
+        self._ir_test_ok = 0
+        self._ir_test_err = 0
+        self.ir_test_btn.setEnabled(False)
+        self._ui(lambda: self.cancel_ir_test_btn.setVisible(True))
+        self._ui(lambda: self.ir_test_label.setText("running…"))
+        threading.Thread(target=self._do_ir_test, daemon=True).start()
+
+    def _on_cancel_ir_test(self):
+        self._ir_test_stop.set()
+        self._log("Stopping IR test…", "warn")
+
+    def _do_ir_test(self):
+        try:
+            assert self.transport is not None
+            self._log("IR test started — waiting for pings from GBC ([Test IR] on the GBC main menu).")
+            while not self._ir_test_stop.is_set():
+                # Listen for a PING from the GBC
+                try:
+                    raw = self.transport.receive_message(first_chunk_timeout_ms=5_000)
+                except TransportError:
+                    # Timeout — keep waiting
+                    continue
+
+                try:
+                    msg_type, body = unpack_message(raw)
+                except Exception as e:
+                    self._log(f"Decode error: {e}", "err")
+                    self._ir_test_err += 1
+                    continue
+
+                if msg_type != MSG_PING:
+                    self._log(f"Unexpected msg 0x{msg_type:02x} (expected PING)", "warn")
+                    self._ir_test_err += 1
+                    continue
+
+                counter = body[3] if len(body) >= 4 else 0
+
+                # Small pause so the GBC has time to enter receive mode
+                time.sleep(0.05)
+
+                # Send PONG with same payload
+                pong = pack_message(MSG_PONG, body)
+                try:
+                    self.transport.send_message(pong, stop_event=self._ir_test_stop)
+                except TransportError as e:
+                    self._log(f"PONG #{counter} send failed: {e}", "err")
+                    self._ir_test_err += 1
+                    continue
+
+                self._ir_test_ok += 1
+                ok = self._ir_test_ok
+                err = self._ir_test_err
+                self._log(f"Ping #{counter}: PONG sent. OK={ok} ERR={err}", "good")
+                self._ui(lambda: self.ir_test_label.setText(
+                    f"OK: {self._ir_test_ok}  ERR: {self._ir_test_err}"
+                ))
+
+            self._log(
+                f"IR test stopped. OK={self._ir_test_ok} ERR={self._ir_test_err}", "warn"
+            )
+        finally:
+            self._ui(lambda: self.ir_test_btn.setEnabled(True))
+            self._ui(lambda: self.cancel_ir_test_btn.setVisible(False))
+            self._ui(lambda: self.ir_test_label.setText(
+                f"OK: {self._ir_test_ok}  ERR: {self._ir_test_err}"
+            ))
 
     def _on_broadcast(self):
         if not self.last_signed_tx_hex:
@@ -1108,8 +1194,9 @@ class DogeGBCompanion(QMainWindow):
                 f"Transaction accepted by the network.\ntxid: {txid}",
             ))
         except Exception as e:
-            self._log(f"Broadcast failed: {e}", "err")
-            self._ui(lambda: QMessageBox.critical(self, "DogeGB", f"Broadcast failed:\n{e}"))
+            msg = str(e)
+            self._log(f"Broadcast failed: {msg}", "err")
+            self._ui(lambda msg=msg: QMessageBox.critical(self, "DogeGB", f"Broadcast failed:\n{msg}"))
         finally:
             self._ui(lambda: self.broadcast_btn.setEnabled(True))
 

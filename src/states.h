@@ -25,7 +25,8 @@ typedef enum {
     STATE_TESTING,
     STATE_SET_PIN,
     STATE_ENTER_PIN,
-    STATE_SIGN_TX_IR
+    STATE_SIGN_TX_IR,
+    STATE_IR_TEST
 } AppState;
 
 #endif
