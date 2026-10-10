@@ -107,9 +107,16 @@ static void show_rom_check_screen(void) {
         OBP0_REG = 0xE4;
         OBP1_REG = 0xE4;
     }
-    prepare_rom_check_bar();
     gotoxy(4, BOOT_CHECK_TEXT_Y);
     printf("Checking ROM");
+
+    if (!rom_last_in_range(scan_last)) {
+        gotoxy(2, 12);
+        printf("Corrupted ROM!");
+        while (1) vsync();
+    }
+
+    prepare_rom_check_bar();
     scan_bar_reset();
 
     vsync();

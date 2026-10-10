@@ -1,7 +1,6 @@
 #pragma bank 0
 #include "bitrot_rom.h"
 #include <gb/gb.h>
-#include <string.h>
 #include <stdint.h>
 #include <stdio.h>
 
@@ -27,8 +26,9 @@ void crc_clear(void);
    which clears rROMB1. Each bank is read with interrupts off so a
    handler cannot put a different bank back mid-checksum. */
 static void rom_select(uint16_t bank) {
-    rROMB1 = (uint8_t)(bank >> 8);
+    /* Low byte, then the high bit. Banks past 255 need both. */
     rROMB0 = (uint8_t)bank;
+    rROMB1 = (uint8_t)(bank >> 8);
 }
 
 /* Back to a code bank. SWITCH_ROM leaves rROMB1 alone, so a bank
@@ -42,20 +42,29 @@ static uint16_t rom_bank_count(void) {
     return (uint16_t)(2u << rom_size_code);
 }
 
-// Trailer is 8 bytes at the end of the last bank:
-// checksum u16, last_used u16, crc32 u32.
+bool rom_last_in_range(uint16_t last_used) {
+    return last_used < ROM_TRAILER_BANK && last_used < rom_bank_count();
+}
+
+/* Trailer is 8 bytes at CPU 0x4000 of ROM_TRAILER_BANK:
+   checksum u16, last_used u16, crc32 u32. */
 void read_trailer(uint16_t *last_used, uint16_t *checksum, uint32_t *crc) {
     uint8_t saved = _current_bank;
-    uint16_t last_bank = (uint16_t)(rom_bank_count() - 1u);
     __critical {
-        rom_select(last_bank);
+        rom_select(ROM_TRAILER_BANK);
         if (checksum) {
-            *checksum = (uint16_t)(*(const uint8_t *)0x7FF8)
-                      | ((uint16_t)(*(const uint8_t *)0x7FF9) << 8);
+            *checksum = (uint16_t)(*(volatile uint8_t *)0x4000)
+                      | ((uint16_t)(*(volatile uint8_t *)0x4001) << 8);
         }
-        *last_used = (uint16_t)(*(const uint8_t *)0x7FFA)
-                   | ((uint16_t)(*(const uint8_t *)0x7FFB) << 8);
-        if (crc) memcpy(crc, (void *)0x7FFC, 4);
+        *last_used = (uint16_t)(*(volatile uint8_t *)0x4002)
+                   | ((uint16_t)(*(volatile uint8_t *)0x4003) << 8);
+        if (crc) {
+            uint8_t *p = (uint8_t *)crc;
+            p[0] = *(volatile uint8_t *)0x4004;
+            p[1] = *(volatile uint8_t *)0x4005;
+            p[2] = *(volatile uint8_t *)0x4006;
+            p[3] = *(volatile uint8_t *)0x4007;
+        }
         rom_restore(saved);
     }
 }

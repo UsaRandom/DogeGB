@@ -14,8 +14,9 @@
 #define COMB_TOP  336u
 
 static void map_bank(uint16_t bank) {
-    rROMB1 = (uint8_t)(bank >> 8);
+    /* Low byte, then the high bit. Banks 256..338 need both. */
     rROMB0 = (uint8_t)bank;
+    rROMB1 = (uint8_t)(bank >> 8);
 }
 
 void comb_load(uint8_t window, uint16_t mag, uint8_t *dst) {

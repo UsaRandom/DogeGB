@@ -18,7 +18,7 @@ import random
 import os
 from collections import Counter
 
-def find_last_used_bank(data: bytearray, bank_size: int = 0x4000, varied_threshold: int = 7) -> int:
+def find_last_used_bank(data: bytearray, bank_size: int = 0x4000, varied_threshold: int = 8) -> int:
     """
     Highest bank where (bank_size - most_common_byte_count) > threshold
     """

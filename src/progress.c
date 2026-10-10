@@ -271,6 +271,7 @@ bool rom_verify_integrity(void) BANKED {
     uint32_t computed;
 
     read_trailer(&last, 0, &stored);
+    if (!rom_last_in_range(last)) return false;
     rom_crc_open();
     for (b = 0; b <= last; b++) {
         rom_crc_bank(b);
