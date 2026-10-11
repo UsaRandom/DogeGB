@@ -590,34 +590,32 @@ function renderReview() {
 }
 
 function renderType() {
-  const pages = typePages();
-  const page = pages[state.page];
-  const last = state.page === pages.length - 1;
-  const blocks = page.map((item) => h("div", { class: "group-block" }, [
-    h("p", { class: "num" }, [item.label]),
-    h("p", { class: "chars" }, [item.text]),
-  ]));
+  const rows = typePages().map((page) => h("div", { class: "type-row" }, page.map((item) => (
+    h("div", { class: "group-block" }, [
+      h("p", { class: "num" }, [item.label]),
+      h("p", { class: "chars" }, [item.text]),
+    ])
+  ))));
   screen.append(
     h("h1", {}, ["Type this"]),
     h("p", { class: "lead" }, ["Type every character. Skip the small number."]),
-    h("p", { class: "note" }, [(state.page + 1) + " of " + pages.length]),
-    h("div", { class: "type-row" }, blocks),
-    h("div", { class: "actions" }, [
-      last
-        ? primary("Done", () => {
-          state.step = "home";
-          state.page = 0;
-          state.amountText = "";
-          state.amountFromCode = false;
-          state.plan = null;
-          state.result = null;
-          render();
-        })
-        : primary("I've typed these", () => { state.page += 1; render(); }),
+    h("div", { class: "type-sheet" }, [
+      ...rows,
+      h("details", {}, [
+        h("summary", {}, ["Save a copy"]),
+        textButton("Copy everything", copyAll),
+      ]),
     ]),
-    h("details", {}, [
-      h("summary", {}, ["Save a copy"]),
-      textButton("Copy everything", copyAll),
+    h("div", { class: "actions" }, [
+      primary("Done", () => {
+        state.step = "home";
+        state.page = 0;
+        state.amountText = "";
+        state.amountFromCode = false;
+        state.plan = null;
+        state.result = null;
+        render();
+      }),
     ])
   );
 }
@@ -924,6 +922,7 @@ function render() {
   stopCamera();
   parkCamera();
   document.body.classList.toggle("scanning", state.step === "scan");
+  document.body.classList.toggle("typing", state.step === "type");
   const step = stepIndex();
   dotsEl.replaceChildren();
   for (let i = 0; i < 4; i++) {
@@ -937,10 +936,7 @@ function render() {
     else if (state.step === "found") go("home");
     else if (state.step === "pay") go(state.wallet ? "found" : "home");
     else if (state.step === "review") go("pay");
-    else if (state.step === "type") {
-      if (state.page > 0) { state.page -= 1; render(); }
-      else go("review");
-    }
+    else if (state.step === "type") go("review");
   };
   screen.replaceChildren();
   if (state.step === "home") renderHome();

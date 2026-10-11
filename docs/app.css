@@ -230,7 +230,20 @@ summary {
   pointer-events: none;
 }
 
-.group-block { margin: 0.4rem 0 1rem; }
+.type-sheet {
+  display: flex;
+  flex-direction: column;
+  gap: 1.15rem;
+  width: min(100%, 34rem);
+  align-self: center;
+}
+.type-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  column-gap: 0.75rem;
+  align-items: start;
+}
+.group-block { margin: 0; text-align: center; }
 .num {
   margin: 0;
   color: var(--muted);
@@ -241,9 +254,24 @@ summary {
   margin: 0;
   color: var(--gold);
   font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-  font-size: 2.15rem;
-  letter-spacing: 0.06em;
-  word-break: break-all;
+  font-size: clamp(1.15rem, 5.4vw, 2.05rem);
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}
+body.typing #app {
+  height: 100dvh;
+  overflow: hidden;
+}
+body.typing #screen {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+body.typing .type-sheet {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding-bottom: 0.25rem;
 }
 
 body.scanning #app { max-width: none; padding-left: 0.7rem; padding-right: 0.7rem; }
@@ -267,12 +295,8 @@ body.scanning .finder { flex: 1 1 auto; min-height: 12rem; }
     gap: 1rem;
     align-items: end;
   }
-  .type-row {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.2rem 2.5rem;
-  }
-  .chars { font-size: 2.35rem; white-space: nowrap; word-break: normal; }
+  .type-row { column-gap: 2rem; }
+  .chars { font-size: 2.05rem; }
   .finder { min-height: 28rem; }
   body.scanning #app { max-width: 40rem; }
   body.scanning #screen { flex: 1; }
