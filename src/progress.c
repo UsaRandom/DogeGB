@@ -1,8 +1,6 @@
 #include "progress.h"
 #include <gb/gb.h>
-#include <stdio.h>
 #include <string.h>
-#include <gbdk/console.h>
 #include <gbdk/font.h>
 #include <draw.h>
 #include "src/assets/progress_bar.h"
@@ -21,7 +19,7 @@ uint8_t total_progress = 0;
 
 #define TILE_BASE 200           
 #define BAR_X 1
-#define BAR_Y 15
+#define BAR_Y 10
 #define BAR_TOTAL_TILES 18      
 #define BAR_TOTAL_PX (BAR_TOTAL_TILES * 8)
 
@@ -153,9 +151,46 @@ static void mark_addr_check(void) {
 }
 
 
+/* band puts the title in the inverted top 3 rows. Address gen keeps row 6. */
+static void draw_progress_chrome(char *title, uint8_t band) {
+    uint8_t i;
+    unsigned char top_empty[BAR_TOTAL_TILES];
+    unsigned char bot_empty[BAR_TOTAL_TILES];
+
+    bar_draw_y = BAR_Y;
+    use_coin_bar_color();
+    set_bkg_data(TILE_BASE, progress_bar_TILE_COUNT, progress_bar_tiles);
+
+    if (_cpu == CGB_TYPE) {
+        VBK_REG = 1;
+        fill_bkg_rect(BAR_X, BAR_Y, BAR_TOTAL_TILES, 2, 6);
+        if (band) fill_bkg_rect(0, 0, 20, 3, 1);
+        VBK_REG = 0;
+    }
+
+    if (band) draw_text(1, title, text_x_pos(title));
+    else draw_text(ADDR_TITLE_Y, title, text_x_pos(title));
+
+    top_empty[0] = TILE_BASE + 0;
+    bot_empty[0] = TILE_BASE + 23;
+    for (i = 1; i < BAR_TOTAL_TILES - 1; i++) {
+        top_empty[i] = TILE_BASE + 14;
+        bot_empty[i] = TILE_BASE + 37;
+    }
+    top_empty[BAR_TOTAL_TILES - 1] = TILE_BASE + 7;
+    bot_empty[BAR_TOTAL_TILES - 1] = TILE_BASE + 30;
+
+    set_bkg_tiles(BAR_X, BAR_Y,     BAR_TOTAL_TILES, 1, top_empty);
+    set_bkg_tiles(BAR_X, BAR_Y + 1, BAR_TOTAL_TILES, 1, bot_empty);
+
+    progress_ride_begin(band ? 8u : 0u);
+    progress_ride_tick(0UL, work_total);
+}
+
 void show_progress_page() BANKED {
     uint16_t last = 0;
     unsigned long banks;
+    char title[] = "Address Gen.";
 
     vsync();
     clear_screen();
@@ -171,43 +206,24 @@ void show_progress_page() BANKED {
         work_total += ADDRESS_WORK_UL;
     }
     progress_on = 1;
-    bar_draw_y = BAR_Y;
+    draw_progress_chrome(title, 0);
+}
 
-    use_coin_bar_color();
+void show_sign_progress(uint8_t n_in) BANKED {
+    char title[] = "Signing";
+    unsigned long n = n_in;
 
-    set_bkg_data(TILE_BASE, progress_bar_TILE_COUNT, progress_bar_tiles);
-
-    if(_cpu == CGB_TYPE) {
-        VBK_REG = 1;
-        fill_bkg_rect(0, 0, 20, 3, 1);
-        fill_bkg_rect(0, BAR_Y-1, 20, BAR_Y-3, 0); 
-        fill_bkg_rect(BAR_X, BAR_Y, BAR_TOTAL_TILES, 2, 6); 
-        fill_bkg_rect(0, BAR_Y + 2, 20, 7, 0); 
-        VBK_REG = 0;
-    }
-
-    gotoxy(1, 1);
-    printf("   Address Gen.");
-
-    unsigned char top_empty[BAR_TOTAL_TILES];
-    unsigned char bot_empty[BAR_TOTAL_TILES];
-
-    top_empty[0] = TILE_BASE + 0;
-    bot_empty[0] = TILE_BASE + 23;
-
-    for (uint8_t i = 1; i < BAR_TOTAL_TILES - 1; i++) {
-        top_empty[i] = TILE_BASE + 14;
-        bot_empty[i] = TILE_BASE + 37;  
-    }
-
-    top_empty[BAR_TOTAL_TILES - 1] = TILE_BASE + 7;
-    bot_empty[BAR_TOTAL_TILES - 1] = TILE_BASE + 30; 
-
-    set_bkg_tiles(BAR_X, BAR_Y,     BAR_TOTAL_TILES, 1, top_empty);
-    set_bkg_tiles(BAR_X, BAR_Y + 1, BAR_TOTAL_TILES, 1, bot_empty);
-
-    progress_ride_begin();
-    progress_ride_tick(0UL, work_total);
+    vsync();
+    clear_screen();
+    total_work = 0UL;
+    total_progress = 0;
+    progress_accum = 0;
+    if (n < 1UL) n = 1UL;
+    if (n > 4UL) n = 4UL;
+    work_total = SIGN_FIXED_MS + n * SIGN_PER_INPUT_MS;
+    if (work_total == 0UL) work_total = 1UL;
+    progress_on = 1;
+    draw_progress_chrome(title, 1);
 }
 
 /* Known abandon wallet. The phrase and the three addresses live in

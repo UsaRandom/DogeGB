@@ -8,6 +8,7 @@ CFLAGS = -msm83:gb \
          -Wl-ya1 \
          -Wb-ext=.rel \
          -Wm-yC \
+         -Wl-m \
          -I. \
          -Ibuild \
          -Isrc/crypto \
@@ -32,6 +33,7 @@ SRC = src/main.c \
       src/assets/progress_bar.c \
       src/assets/keyboard.c \
       src/assets/keyboard_lightgrey.c \
+      src/assets/keyboard_base58.c \
       src/assets/bork.c \
       src/assets/pepelogo.c \
       src/assets/bellslogo.c \
@@ -60,6 +62,10 @@ SRC = src/main.c \
       src/wallet.c \
       src/bonktime.c \
       src/word_input.c \
+      src/sign_input.c \
+      src/sign_review.c \
+      src/sign_tx.c \
+      src/crypto/ecdsa.c \
       src/menu.c \
       src/pin.c \
       src/draw.c \
@@ -121,6 +127,7 @@ assets:
 	./gbdk/bin/png2asset ./raw_assets/dpadbutton_left.png -map -noflip -tile_origin 85 -b $(bank) -o ./src/assets/dpadbutton_left.c
 	./gbdk/bin/png2asset ./raw_assets/keyboard.png -map -noflip -tile_origin 88 -b 5 -use_map_attributes -o ./src/assets/keyboard.c
 	./gbdk/bin/png2asset ./raw_assets/keyboard_lightgrey.png -map -noflip -tile_origin 160 -b 5 -use_map_attributes -o ./src/assets/keyboard_lightgrey.c
+	./gbdk/bin/png2asset ./raw_assets/keyboard_base58.png -map -noflip -tile_origin 0 -b 13 -use_map_attributes -o ./src/assets/keyboard_base58.c
 	./gbdk/bin/png2asset ./raw_assets/pepecoin.png -tile_origin 202 -b 1 -o ./src/assets/pepecoin.c
 	./gbdk/bin/png2asset ./raw_assets/bellscoin.png -tile_origin 202 -b 1 -o ./src/assets/bellscoin.c
 	./gbdk/bin/png2asset ./raw_assets/dogecoin.png -tile_origin 202 -b 1 -o ./src/assets/dogecoin.c

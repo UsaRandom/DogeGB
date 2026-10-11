@@ -9,6 +9,7 @@
 
 extern AppState current_state;
 extern char words[12][9];
+extern void focus_create_wallet(void) BANKED;
 
 void handle_bonk_game(void) BANKED {
     bonktime(BONKTIME_GAME_MODE);
@@ -36,6 +37,7 @@ void handle_bonktime_entropy(void) BANKED {
 
     
     generate_mnemonic(words);
+    focus_create_wallet();
 
     current_state = STATE_SHOW_GENERATED_WORDS;
 }

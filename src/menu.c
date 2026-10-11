@@ -17,6 +17,17 @@
 
 #pragma bank 1
 
+/* chksum tiles live in this bank. Callers in another bank must use these
+   instead of SWITCH_ROM, which would unmap their own code. */
+void load_chksum_gfx(void) BANKED {
+    set_bkg_data(chksum_TILE_ORIGIN, chksum_TILE_COUNT, chksum_tiles);
+    set_bkg_palette(6, 1, chksum_palettes);
+}
+
+void draw_chksum_mark(uint8_t x, uint8_t y) BANKED {
+    set_bkg_tiles(x, y, 3, 3, chksum_map);
+}
+
 uint8_t cursor_pos = 0;
 uint8_t target_pos = 0;
 int8_t current_y_offset = 0;
@@ -249,7 +260,6 @@ int8_t menu(const char* title, const char** options, uint8_t num_options) BANKED
 
 int8_t show_backup_menu(int8_t startPos, uint8_t mode, char mnemonic[12][9]) BANKED {
     if (startPos < 0) startPos = 0;
-    if (startPos > 11) startPos = 11;
 
     menu_mode = mode;
 
@@ -293,6 +303,8 @@ int8_t show_backup_menu(int8_t startPos, uint8_t mode, char mnemonic[12][9]) BAN
         options[12] = create_opt;
         num_options = 13;
     }
+
+    if (startPos >= (int8_t)num_options) startPos = (int8_t)(num_options - 1);
 
     //only display checksum warning when all 12 words present
     checksum_valid = !all_filled || bip39_checksum_valid(mnemonic_str); 

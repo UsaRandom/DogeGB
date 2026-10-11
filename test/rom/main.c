@@ -5,6 +5,7 @@
 #include "hd_wallet.h"
 #include "pbkdf2.h"
 #include "sha512.h"
+#include "ecdsa.h"
 
 /* Banked field square already in secp256k1.c. One multiply, no scalar loop. */
 void test_mul(uint8_t *out) BANKED;
@@ -127,6 +128,34 @@ void main(void) {
         run_pbkdf2(1, 3);
     } else if (id == 4) {
         run_address();
+    } else if (id == 5) {
+        static uint8_t out[4];
+        ecdsa_bench_sizes(out);
+        finish(5, out, 4);
+    } else if (id == 6) {
+        static uint8_t out[32];
+        ecdsa_bench_rfc(out);
+        finish(6, out, 32);
+    } else if (id == 7) {
+        static uint8_t out[32];
+        ecdsa_bench_inv(out);
+        finish(7, out, 32);
+    } else if (id == 8) {
+        static uint8_t out[32];
+        ecdsa_bench_mul(out);
+        finish(8, out, 32);
+    } else if (id == 9) {
+        static uint8_t out[32];
+        ecdsa_bench_hash(out);
+        finish(9, out, 32);
+    } else if (id == 10) {
+        static uint8_t out[106];
+        uint8_t n;
+        memset(out, 0, sizeof out);
+        ecdsa_bench_sign(out);
+        n = out[32];
+        if (n > 73u) n = 73u;
+        finish(10, out, (uint16_t)(33u + n));
     } else {
         finish(id, 0, 0);
     }

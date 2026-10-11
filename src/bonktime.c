@@ -278,6 +278,20 @@ void print_str(uint8_t line, const char* str) {
 }
 
 
+void draw_qr_sides(void) BANKED {
+    set_bkg_palette(7, 1, dpadbutton_left_palettes);
+    set_bkg_data(dpadbutton_left_TILE_ORIGIN, dpadbutton_left_TILE_COUNT, dpadbutton_left_tiles);
+    set_bkg_data(dpadbutton_right_TILE_ORIGIN, dpadbutton_right_TILE_COUNT, dpadbutton_right_tiles);
+    set_bkg_tiles(0, 8, 2, 2, dpadbutton_left_map);
+    set_bkg_tiles(18, 8, 2, 2, dpadbutton_right_map);
+    if (_cpu == CGB_TYPE) {
+        VBK_REG = 1;
+        fill_bkg_rect(0, 8, 2, 2, 7);
+        fill_bkg_rect(18, 8, 2, 2, 7);
+        VBK_REG = 0;
+    }
+}
+
 // --- MAIN FUNCTION ---
 uint8_t* bonktime(uint8_t mode) BANKED {
 

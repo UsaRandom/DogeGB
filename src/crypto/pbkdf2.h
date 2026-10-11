@@ -7,4 +7,7 @@
 // PBKDF2-HMAC-SHA512 with 2048 iterations (BIP39 standard)
 void pbkdf2_hmac_sha512(uint8_t *out, const uint8_t *password, uint32_t password_len, const uint8_t *salt, uint32_t salt_len, uint32_t iterations) BANKED;
 
+/* Signing borrows this block. The next address generation fills it again. */
+uint8_t *kdf_scratch(uint16_t *len) BANKED;
+
 #endif

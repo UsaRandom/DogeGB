@@ -30,7 +30,8 @@ CRYPTO := \
 	$(ROOT)/src/crypto/gpow_table.c \
 	$(ROOT)/src/crypto/gpow_load.c \
 	$(ROOT)/src/crypto/comb_load.c \
-	$(ROOT)/src/crypto/comb_mul.c
+	$(ROOT)/src/crypto/comb_mul.c \
+	$(ROOT)/src/crypto/ecdsa.c
 
 OUTDIR := build
 ROM := $(OUTDIR)/crypto_test.gb

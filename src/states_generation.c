@@ -39,6 +39,10 @@ extern wallet current_wallet;
 
 static int8_t wordSelection = 0;
 
+void focus_create_wallet(void) BANKED {
+    wordSelection = 12;
+}
+
 static void hang_failed(void) {
 #ifndef TEST_MODE
     __asm__("ei");

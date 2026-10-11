@@ -140,7 +140,7 @@ static uint16_t read16(struct gb_s *gb, unsigned addr) {
 
 static void usage(const char *argv0) {
     fprintf(stderr,
-            "usage: %s <crypto_test.gb> <symbols.noi> <test_id 1-4> [timeout_sec]\n"
+            "usage: %s <crypto_test.gb> <symbols.noi> <test_id 1-10> [timeout_sec]\n"
             "  1  SHA-512(\"abc\")\n"
             "  2  secp256k1 Gx^2 mod p\n"
             "  3  PBKDF2-HMAC-SHA512, 1 iteration\n"
@@ -173,7 +173,7 @@ int main(int argc, char **argv) {
     }
 
     test_id = (unsigned)strtoul(argv[3], &end, 10);
-    if (!end || *end || test_id < 1 || test_id > 4) {
+    if (!end || *end || test_id < 1 || test_id > 10) {
         usage(argv[0]);
         return 1;
     }

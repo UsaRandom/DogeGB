@@ -2,6 +2,7 @@
 #include <stdint.h>
 #include <draw.h>
 #include "menu.h"
+#include "progress.h"
 
 /* The ETA and the two coins. Bank 12 so the home bank stays free. */
 #pragma bank 12
@@ -19,13 +20,13 @@ static const uint8_t coin_spin[12] = {1, 2, 3, 2, 1, 0, 1, 2, 3, 2, 1, 0};
 #define COIN_HOLD_MS 2000UL
 #define COIN_FLIP_MS 167UL
 
-/* Ten characters, centered: " 8:42 left" or "11:34 left". */
+/* Ten characters, centered: "08:42 left" or "11:34 left". */
 static void paint_eta(uint16_t secs) {
     uint8_t min = (uint8_t)(secs / 60);
     uint8_t sec = (uint8_t)(secs % 60);
     char t[11];
 
-    t[0] = (min >= 10) ? (char)('0' + min / 10) : ' ';
+    t[0] = (char)('0' + min / 10);
     t[1] = (char)('0' + (min % 10));
     t[2] = ':';
     t[3] = (char)('0' + sec / 10);
@@ -63,9 +64,9 @@ static void step_coins(unsigned long done) {
     }
 }
 
-void progress_ride_begin(void) BANKED {
-    eta_row = 9;
-    coin_y = 88;
+void progress_ride_begin(uint8_t spread) BANKED {
+    eta_row = ADDR_ETA_Y;
+    coin_y = (uint8_t)(ADDR_ETA_Y * 8u + 16u);
     eta_shown = 0xFFFF;
     coin_frame = 0;
     coin_at = 0;
@@ -75,8 +76,8 @@ void progress_ride_begin(void) BANKED {
     set_sprite_tile(1, 0);
     set_sprite_prop(0, 0);
     set_sprite_prop(1, 0);
-    move_sprite(0, 40, coin_y);
-    move_sprite(1, 128, coin_y);
+    move_sprite(0, (uint8_t)(40u - spread), coin_y);
+    move_sprite(1, (uint8_t)(128u + spread), coin_y);
     SHOW_SPRITES;
     copy_sprites();
 }

@@ -8,14 +8,37 @@
 extern uint8_t crypto_debug;
 
 
-// Static buffers to avoid stack overflow
-static uint8_t u[SHA512_HASH_LENGTH];
-static uint8_t k_ipad[128];
-static uint8_t k_opad[128];
-static uint8_t tk[SHA512_HASH_LENGTH];
-static SHA512_CTX ctx_inner_init, ctx_outer_init;
-static SHA512_CTX ctx_inner, ctx_outer;
-static uint8_t salt_block[132];
+/* One block. Signing overlays it and must not call PBKDF2 while it does.
+   Field names differ from the macros so the macros can keep the old
+   names in the unrolled copies below. */
+static union {
+    struct {
+        uint8_t u_buf[SHA512_HASH_LENGTH];
+        uint8_t k_ipad_buf[128];
+        uint8_t k_opad_buf[128];
+        uint8_t tk_buf[SHA512_HASH_LENGTH];
+        SHA512_CTX ctx_inner_init_buf;
+        SHA512_CTX ctx_outer_init_buf;
+        SHA512_CTX ctx_inner_buf;
+        SHA512_CTX ctx_outer_buf;
+        uint8_t salt_block_buf[132];
+    } kdf;
+} kdf_mem;
+
+#define u            kdf_mem.kdf.u_buf
+#define k_ipad       kdf_mem.kdf.k_ipad_buf
+#define k_opad       kdf_mem.kdf.k_opad_buf
+#define tk           kdf_mem.kdf.tk_buf
+#define ctx_inner_init kdf_mem.kdf.ctx_inner_init_buf
+#define ctx_outer_init kdf_mem.kdf.ctx_outer_init_buf
+#define ctx_inner    kdf_mem.kdf.ctx_inner_buf
+#define ctx_outer    kdf_mem.kdf.ctx_outer_buf
+#define salt_block   kdf_mem.kdf.salt_block_buf
+
+uint8_t *kdf_scratch(uint16_t *len) BANKED {
+    *len = (uint16_t)sizeof(kdf_mem);
+    return (uint8_t *)&kdf_mem;
+}
 
 void pbkdf2_hmac_sha512(uint8_t *out, const uint8_t *password, uint32_t password_len, const uint8_t *salt, uint32_t salt_len, uint32_t iterations) BANKED {
     register uint32_t i;
