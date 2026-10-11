@@ -1,11 +1,14 @@
 if (!globalThis.DogeCodec) throw new Error("This page did not start.");
 const {
+  assembleSigBlob,
+  buildSignedTx,
   decodeAddress,
   dogeToKoinu,
   encodeString,
   extractPayment,
   feeRatePerByte,
   formatDoge,
+  parseSigPage,
   priceFixed,
   scriptP2pkh,
   selectCoins,
@@ -34,9 +37,15 @@ const state = {
   result: null,
   page: 0,
   draft: "",
+  sigParts: [],
+  sigCount: 0,
+  txHex: "",
+  txHash: "",
+  sendError: "",
 };
 
 let scanGen = 0;
+let sendGen = 0;
 let stream = null;
 let cameraAsked = false;
 
@@ -83,7 +92,8 @@ function checkedCoins() {
 function stepIndex() {
   if (state.step === "pay") return 1;
   if (state.step === "review") return 2;
-  if (state.step === "type") return 3;
+  if (state.step === "type" || state.step === "send" || state.step === "sent") return 3;
+  if (state.step === "scan" && state.scanFor === "signed") return 3;
   return 0;
 }
 
@@ -550,6 +560,11 @@ async function submitPay() {
     return;
   }
   state.page = 0;
+  state.sigParts = [];
+  state.sigCount = 0;
+  state.txHex = "";
+  state.txHash = "";
+  state.sendError = "";
   state.step = "review";
   render();
 }
@@ -607,15 +622,8 @@ function renderType() {
       ]),
     ]),
     h("div", { class: "actions" }, [
-      primary("Done", () => {
-        state.step = "home";
-        state.page = 0;
-        state.amountText = "";
-        state.amountFromCode = false;
-        state.plan = null;
-        state.result = null;
-        render();
-      }),
+      primary("Scan the signed codes", startSignedScan),
+      textButton("Done", finishPay),
     ])
   );
 }
@@ -699,13 +707,20 @@ function renderScan() {
   const video = document.getElementById("cam");
   if (video) prepareCamera(video);
   const photo = h("input", { id: "photo", type: "file", accept: "image/*", capture: "environment" });
-  photo.addEventListener("change", () => readPhoto(photo.files && photo.files[0]));
-  const title = state.scanFor === "wallet" ? "Scan your Game Boy" : "Scan their code";
+  photo.addEventListener("change", () => {
+    const file = photo.files && photo.files[0];
+    photo.value = "";
+    readPhoto(file);
+  });
+  const signed = state.scanFor === "signed";
+  const title = signed ? "Scan the signed codes" : (state.scanFor === "wallet" ? "Scan your Game Boy" : "Scan their code");
   const bits = [
     h("h1", {}, [title]),
-    h("p", { class: "lead" }, [live
-      ? "Tap Allow the camera. Safari will ask before the picture starts."
-      : "Take a photo of the code."]),
+    h("p", { class: "lead" }, [signed
+      ? signedProgress()
+      : (live
+        ? "Tap Allow the camera. Safari will ask before the picture starts."
+        : "Take a photo of the code.")]),
   ];
   if (live) bits.push(h("div", { class: "finder" }, [h("div", { class: "frame" })]));
   bits.push(h("p", { class: "bad" }, [state.scanError]));
@@ -718,7 +733,9 @@ function renderScan() {
     id: "take-photo",
     class: live ? "secondary pick" : "primary pick",
   }, [live ? "Take a photo instead" : "Take a photo", photo]));
-  bits.push(textButton("Type it instead", () => go(state.scanFor === "wallet" ? "typeWallet" : "pay")));
+  if (!signed) {
+    bits.push(textButton("Type it instead", () => go(state.scanFor === "wallet" ? "typeWallet" : "pay")));
+  }
   screen.append(...bits);
   if (live) placeCamera();
 }
@@ -804,7 +821,11 @@ function gotCamera(gen, got) {
     if (gen !== scanGen || shown) return;
     shown = true;
     const lead = screen.querySelector(".lead");
-    if (lead) lead.textContent = "Fill the box with the code. Hold steady.";
+    if (lead) {
+      lead.textContent = state.scanFor === "signed"
+        ? signedProgress()
+        : "Fill the box with the code. Hold steady.";
+    }
     const button = document.getElementById("allow-cam");
     if (button) button.hidden = true;
     const bad = screen.querySelector(".bad");
@@ -836,9 +857,33 @@ function gotCamera(gen, got) {
   listenForCodes(gen, video);
 }
 
+function qrBytes(code) {
+  if (!code || !code.chunks) return null;
+  const bytes = [];
+  for (const chunk of code.chunks) {
+    if (chunk.type === "byte" && chunk.bytes) {
+      for (const b of chunk.bytes) bytes.push(b);
+    }
+  }
+  return bytes.length ? new Uint8Array(bytes) : null;
+}
+
+function readJsQr(video, canvas, ctx) {
+  if (typeof jsQR !== "function" || video.readyState < 2) return null;
+  const scale = Math.min(1, 640 / (video.videoWidth || 640));
+  canvas.width = Math.max(1, Math.floor(video.videoWidth * scale));
+  canvas.height = Math.max(1, Math.floor(video.videoHeight * scale));
+  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+  const image = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  return jsQR(image.data, image.width, image.height, { inversionAttempts: "attemptBoth" });
+}
+
 function listenForCodes(gen, video) {
+  const signed = state.scanFor === "signed";
   let detector = null;
-  if ("BarcodeDetector" in window) {
+  // The signed codes are raw bytes. BarcodeDetector returns text and
+  // would change those bytes, so that scan uses jsQR only.
+  if (!signed && "BarcodeDetector" in window) {
     try { detector = new BarcodeDetector({ formats: ["qr_code"] }); }
     catch { detector = null; }
   }
@@ -849,28 +894,32 @@ function listenForCodes(gen, video) {
     if (gen !== scanGen) return;
     try {
       let text = "";
-      if (detector) {
+      let bytes = null;
+      let key = "";
+      if (signed) {
+        const code = readJsQr(video, canvas, ctx);
+        if (code) {
+          bytes = qrBytes(code);
+          // Two signed pages can both fail as text. Compare the bytes.
+          key = bytes ? [...bytes].join(",") : "unreadable";
+        }
+      } else if (detector) {
         const codes = await detector.detect(video);
         if (codes.length) text = codes[0].rawValue || "";
-      } else if (typeof jsQR === "function" && video.readyState >= 2) {
-        const scale = Math.min(1, 640 / (video.videoWidth || 640));
-        canvas.width = Math.max(1, Math.floor(video.videoWidth * scale));
-        canvas.height = Math.max(1, Math.floor(video.videoHeight * scale));
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        const image = ctx.getImageData(0, 0, canvas.width, canvas.height);
-        const code = jsQR(image.data, image.width, image.height, { inversionAttempts: "attemptBoth" });
-        if (code) text = code.data;
+        key = text;
+      } else {
+        const code = readJsQr(video, canvas, ctx);
+        if (code) text = code.data || "";
+        key = text;
       }
-      if (!text) lastText = "";
-      else if (text !== lastText) {
-        lastText = text;
-        const err = state.scanFor === "wallet" ? await useWallet(text) : await useDest(text);
+      if (!key) lastText = "";
+      else if (key !== lastText) {
+        lastText = key;
+        const err = signed ? await useSigned(bytes) : (
+          state.scanFor === "wallet" ? await useWallet(text) : await useDest(text)
+        );
         if (state.step !== "scan") return;
-        if (err) {
-          state.scanError = err;
-          const bad = screen.querySelector(".bad");
-          if (bad) bad.textContent = err;
-        }
+        noteScan(err);
       }
     } catch { /* keep looking */ }
     if (gen === scanGen) requestAnimationFrame(tick);
@@ -899,14 +948,180 @@ async function readPhoto(file) {
       if (bad) bad.textContent = state.scanError;
       return;
     }
-    const err = state.scanFor === "wallet" ? await useWallet(code.data) : await useDest(code.data);
-    if (err) {
+    const err = state.scanFor === "signed"
+      ? await useSigned(qrBytes(code))
+      : (state.scanFor === "wallet" ? await useWallet(code.data) : await useDest(code.data));
+    if (state.step !== "scan") return;
+    if (err && state.scanFor !== "signed") {
       state.scanError = err;
       render();
+      return;
     }
+    noteScan(err);
   } finally {
     URL.revokeObjectURL(url);
   }
+}
+
+function signedProgress() {
+  if (!state.sigCount) return "Scan every code. Start with 00.";
+  const have = state.sigParts.map((part) => part.page).sort((a, b) => a - b);
+  const missing = [];
+  for (let i = 0; i < state.sigCount; i++) {
+    if (!have.includes(i)) missing.push(String(i).padStart(2, "0"));
+  }
+  const got = have.map((n) => String(n).padStart(2, "0")).join(" ");
+  if (!missing.length) return "Got " + got + ".";
+  return "Got " + got + ". Still need " + missing.join(" ") + ".";
+}
+
+function noteScan(err) {
+  state.scanError = err || "";
+  const bad = screen.querySelector(".bad");
+  if (bad) bad.textContent = state.scanError;
+  if (state.scanFor === "signed") {
+    const lead = screen.querySelector(".lead");
+    if (lead) lead.textContent = signedProgress();
+  }
+}
+
+function clearSigned() {
+  state.sigParts = [];
+  state.sigCount = 0;
+  state.txHex = "";
+  state.txHash = "";
+  state.sendError = "";
+}
+
+function finishPay() {
+  sendGen += 1;
+  state.page = 0;
+  state.amountText = "";
+  state.amountFromCode = false;
+  state.plan = null;
+  state.result = null;
+  clearSigned();
+  state.step = "home";
+  render();
+}
+
+function startSignedScan() {
+  if (!state.plan || !state.wallet || !state.dest) return;
+  state.scanFor = "signed";
+  state.scanError = "";
+  state.step = "scan";
+  cameraAsked = false;
+  render();
+}
+
+async function useSigned(bytes) {
+  if (!state.plan || !state.wallet || !state.dest) return "Go back and check the payment first.";
+  if (!bytes) return "That code is not a signed page.";
+  let part;
+  try { part = parseSigPage(bytes); }
+  catch (problem) { return problem.message; }
+  if (state.sigCount && part.count !== state.sigCount) return "That code is from a different set.";
+  state.sigCount = part.count;
+  state.sigParts = state.sigParts.filter((got) => got.page !== part.page);
+  state.sigParts.push(part);
+  if (state.sigParts.length < state.sigCount) return "";
+  try {
+    const blob = assembleSigBlob(state.sigParts);
+    state.txHex = await buildSignedTx({
+      inputs: state.plan.inputs,
+      pay: state.plan.pay,
+      change: state.plan.change,
+      typeByte: state.dest.typeByte,
+      hash160: state.dest.hash160,
+      walletHash160: state.wallet.hash160,
+    }, blob);
+  } catch (problem) {
+    return problem.message;
+  }
+  state.step = "send";
+  state.sendError = "";
+  render();
+  broadcast();
+  return "";
+}
+
+function plainSendError(message) {
+  const text = String(message || "");
+  if (/missing reference|orphaned|already spent|inputs-missingorspent/i.test(text)) {
+    return "The network did not take it. A coin may already be spent.";
+  }
+  if (/signature|script-verify|mandatory-script/i.test(text)) {
+    return "The network did not take it. The signature did not match.";
+  }
+  if (/fee|dust/i.test(text)) return "The network did not take it. The fee was not enough.";
+  if (text && text.length < 140) return text;
+  return "The network did not take it.";
+}
+
+async function broadcast() {
+  const gen = ++sendGen;
+  const hex = state.txHex;
+  if (!hex) {
+    state.sendError = "There is no payment to send.";
+    if (state.step === "send") render();
+    return;
+  }
+  try {
+    const res = await fetch("https://api.blockcypher.com/v1/doge/main/txs/push", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tx: hex }),
+    });
+    const text = await res.text();
+    let data = {};
+    try { data = JSON.parse(text); }
+    catch { data = {}; }
+    if (gen !== sendGen || state.step !== "send") return;
+    if (!res.ok || data.error) {
+      state.sendError = plainSendError(data.error || "The network did not take it.");
+      render();
+      return;
+    }
+    state.txHash = String(data.hash || "");
+    state.step = "sent";
+    render();
+  } catch {
+    if (gen !== sendGen || state.step !== "send") return;
+    state.sendError = "The network did not answer. Check your connection.";
+    render();
+  }
+}
+
+function renderSend() {
+  const bits = [
+    h("h1", {}, ["Sending"]),
+    h("p", { class: "lead" }, [
+      state.sendError ? "The payment was not sent." : "The network is taking the payment.",
+    ]),
+    h("p", { class: "bad" }, [state.sendError]),
+  ];
+  if (state.sendError) {
+    bits.push(h("div", { class: "actions" }, [
+      primary("Try again", () => {
+        state.sendError = "";
+        render();
+        broadcast();
+      }),
+    ]));
+  }
+  screen.append(...bits);
+}
+
+function renderSent() {
+  const bits = [
+    h("h1", {}, ["Sent"]),
+    h("p", { class: "lead" }, ["The payment is on the network."]),
+  ];
+  if (state.txHash) bits.push(h("p", { class: "addr" }, [spaced(state.txHash)]));
+  bits.push(h("div", { class: "actions" }, [
+    primary("Done", finishPay),
+  ]));
+  screen.append(...bits);
 }
 
 function startScan(which) {
@@ -931,12 +1146,16 @@ function render() {
   const showBack = state.step !== "home";
   backBtn.hidden = !showBack;
   backBtn.onclick = () => {
-    if (state.step === "scan") go(state.scanFor === "dest" ? "pay" : "home");
-    else if (state.step === "typeWallet") go("home");
+    if (state.step === "scan") {
+      if (state.scanFor === "signed") go("type");
+      else go(state.scanFor === "dest" ? "pay" : "home");
+    } else if (state.step === "typeWallet") go("home");
     else if (state.step === "found") go("home");
     else if (state.step === "pay") go(state.wallet ? "found" : "home");
     else if (state.step === "review") go("pay");
     else if (state.step === "type") go("review");
+    else if (state.step === "send") go("type");
+    else if (state.step === "sent") finishPay();
   };
   screen.replaceChildren();
   if (state.step === "home") renderHome();
@@ -946,6 +1165,8 @@ function render() {
   else if (state.step === "review") renderReview();
   else if (state.step === "type") renderType();
   else if (state.step === "scan") renderScan();
+  else if (state.step === "send") renderSend();
+  else if (state.step === "sent") renderSent();
 }
 
 backBtn.addEventListener("click", () => {});

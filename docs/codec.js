@@ -424,6 +424,237 @@ function priceFixed(numInputs, totalIn, sendValue, feeRate, recipientIsP2sh) {
   return null;
 }
 
+// The signed codes are version 3. Byte 0 is the page, byte 1 is how many
+// pages, and the rest is one slice of the blob. The blob is the 33-byte
+// compressed pubkey, then each signature in input order. A signature is
+// DER and already ends with the SIGHASH_ALL byte, which sits outside the
+// DER length. At most 51 bytes of the blob fit in one code.
+const SIG_PAGE_DATA = 51;
+const SIG_PAGE_MAX = 7;
+
+function ripemd160(message) {
+  const ml = message.length;
+  const withPad = ml + ((ml % 64 < 56) ? (56 - (ml % 64)) : (120 - (ml % 64))) + 8;
+  const padded = new Uint8Array(withPad);
+  padded.set(message);
+  padded[ml] = 0x80;
+  const view = new DataView(padded.buffer);
+  const bits = ml * 8;
+  view.setUint32(withPad - 8, bits >>> 0, true);
+  view.setUint32(withPad - 4, Math.floor(bits / 0x100000000), true);
+
+  let h0 = 0x67452301;
+  let h1 = 0xefcdab89;
+  let h2 = 0x98badcfe;
+  let h3 = 0x10325476;
+  let h4 = 0xc3d2e1f0;
+  const r1 = [
+    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
+    7, 4, 13, 1, 10, 6, 15, 3, 12, 0, 9, 5, 2, 14, 11, 8,
+    3, 10, 14, 4, 9, 15, 8, 1, 2, 7, 0, 6, 13, 11, 5, 12,
+    1, 9, 11, 10, 0, 8, 12, 4, 13, 3, 7, 15, 14, 5, 6, 2,
+    4, 0, 5, 9, 7, 12, 2, 10, 14, 1, 3, 8, 11, 6, 15, 13,
+  ];
+  const r2 = [
+    5, 14, 7, 0, 9, 2, 11, 4, 13, 6, 15, 8, 1, 10, 3, 12,
+    6, 11, 3, 7, 0, 13, 5, 10, 14, 15, 8, 12, 4, 9, 1, 2,
+    15, 5, 1, 3, 7, 14, 6, 9, 11, 8, 12, 2, 10, 0, 4, 13,
+    8, 6, 4, 1, 3, 11, 15, 0, 5, 12, 2, 13, 9, 7, 10, 14,
+    12, 15, 10, 4, 1, 5, 8, 7, 6, 2, 13, 14, 0, 3, 9, 11,
+  ];
+  const s1 = [
+    11, 14, 15, 12, 5, 8, 7, 9, 11, 13, 14, 15, 6, 7, 9, 8,
+    7, 6, 8, 13, 11, 9, 7, 15, 7, 12, 15, 9, 11, 7, 13, 12,
+    11, 13, 6, 7, 14, 9, 13, 15, 14, 8, 13, 6, 5, 12, 7, 5,
+    11, 12, 14, 15, 14, 15, 9, 8, 9, 14, 5, 6, 8, 6, 5, 12,
+    9, 15, 5, 11, 6, 8, 13, 12, 5, 12, 13, 14, 11, 8, 5, 6,
+  ];
+  const s2 = [
+    8, 9, 9, 11, 13, 15, 15, 5, 7, 7, 8, 11, 14, 14, 12, 6,
+    9, 13, 15, 7, 12, 8, 9, 11, 7, 7, 12, 7, 6, 15, 13, 11,
+    9, 7, 15, 11, 8, 6, 6, 14, 12, 13, 5, 14, 13, 13, 7, 5,
+    15, 5, 8, 11, 14, 14, 6, 14, 6, 9, 12, 9, 12, 5, 15, 8,
+    8, 5, 12, 9, 12, 5, 14, 6, 8, 13, 6, 5, 15, 13, 11, 11,
+  ];
+  const k1 = [0x00000000, 0x5a827999, 0x6ed9eba1, 0x8f1bbcdc, 0xa953fd4e];
+  const k2 = [0x50a28be6, 0x5c4dd124, 0x6d703ef3, 0x7a6d76e9, 0x00000000];
+  const rotl = (x, n) => (x << n) | (x >>> (32 - n));
+  const f = (j, x, y, z) => {
+    if (j < 16) return x ^ y ^ z;
+    if (j < 32) return (x & y) | (~x & z);
+    if (j < 48) return (x | ~y) ^ z;
+    if (j < 64) return (x & z) | (y & ~z);
+    return x ^ (y | ~z);
+  };
+
+  for (let off = 0; off < padded.length; off += 64) {
+    const x = new Uint32Array(16);
+    for (let i = 0; i < 16; i++) x[i] = view.getUint32(off + i * 4, true);
+    let al = h0, bl = h1, cl = h2, dl = h3, el = h4;
+    let ar = h0, br = h1, cr = h2, dr = h3, er = h4;
+    for (let j = 0; j < 80; j++) {
+      const sl = (rotl((al + f(j, bl, cl, dl) + x[r1[j]] + k1[j >>> 4]) | 0, s1[j]) + el) | 0;
+      al = el; el = dl; dl = rotl(cl, 10) | 0; cl = bl; bl = sl;
+      const sr = (rotl((ar + f(79 - j, br, cr, dr) + x[r2[j]] + k2[j >>> 4]) | 0, s2[j]) + er) | 0;
+      ar = er; er = dr; dr = rotl(cr, 10) | 0; cr = br; br = sr;
+    }
+    const t = (h1 + cl + dr) | 0;
+    h1 = (h2 + dl + er) | 0;
+    h2 = (h3 + el + ar) | 0;
+    h3 = (h4 + al + br) | 0;
+    h4 = (h0 + bl + cr) | 0;
+    h0 = t;
+  }
+  const out = new Uint8Array(20);
+  const words = new DataView(out.buffer);
+  words.setUint32(0, h0, true);
+  words.setUint32(4, h1, true);
+  words.setUint32(8, h2, true);
+  words.setUint32(12, h3, true);
+  words.setUint32(16, h4, true);
+  return out;
+}
+
+async function hash160(data) {
+  return ripemd160(await sha256(data));
+}
+
+function parseSigPage(bytes) {
+  if (!(bytes instanceof Uint8Array)) bytes = Uint8Array.from(bytes);
+  if (bytes.length < 3 || bytes.length > SIG_PAGE_DATA + 2) {
+    throw new Error("That code is not a signed page.");
+  }
+  const page = bytes[0];
+  const count = bytes[1];
+  if (count < 1 || count > SIG_PAGE_MAX || page >= count) {
+    throw new Error("That code is not a signed page.");
+  }
+  const data = bytes.slice(2);
+  if (data.length === 0 || (page + 1 < count && data.length !== SIG_PAGE_DATA)) {
+    throw new Error("That code is not a signed page.");
+  }
+  return { page, count, data };
+}
+
+function assembleSigBlob(pages) {
+  if (!pages.length) throw new Error("Scan the signed codes.");
+  const count = pages[0].count;
+  if (pages.length !== count) throw new Error("Scan every signed code.");
+  const got = new Array(count);
+  for (const part of pages) {
+    if (part.count !== count || part.page >= count || got[part.page]) {
+      throw new Error("Those codes are not one set.");
+    }
+    if (part.page + 1 < count && part.data.length !== SIG_PAGE_DATA) {
+      throw new Error("That code is not a signed page.");
+    }
+    got[part.page] = part.data;
+  }
+  let n = 0;
+  for (const part of got) n += part.length;
+  const blob = new Uint8Array(n);
+  let at = 0;
+  for (const part of got) {
+    blob.set(part, at);
+    at += part.length;
+  }
+  return blob;
+}
+
+function readSigs(blob) {
+  if (blob.length < 34) throw new Error("The codes are too short.");
+  const pub = blob.slice(0, 33);
+  if (pub[0] !== 2 && pub[0] !== 3) throw new Error("The key on the codes is not a compressed key.");
+  const sigs = [];
+  let p = 33;
+  while (p < blob.length) {
+    if (blob[p] !== 0x30 || p + 2 > blob.length) throw new Error("A signature on the codes is damaged.");
+    const body = blob[p + 1];
+    const total = 2 + body + 1;
+    if (body < 6 || total > 73 || p + total > blob.length || blob[p + total - 1] !== 0x01) {
+      throw new Error("A signature on the codes is damaged.");
+    }
+    sigs.push(blob.slice(p, p + total));
+    p += total;
+  }
+  if (sigs.length < 1 || sigs.length > MAX_INPUTS) {
+    throw new Error("The codes do not match this payment.");
+  }
+  return { pub, sigs };
+}
+
+function scriptFor(typeByte, hash160Bytes) {
+  if (typeByte === 1) {
+    const out = new Uint8Array(23);
+    out[0] = 0xa9;
+    out[1] = 0x14;
+    out.set(hash160Bytes, 2);
+    out[22] = 0x87;
+    return out;
+  }
+  if (typeByte !== 0) throw new Error("Destination type is unknown.");
+  return scriptP2pkh(hash160Bytes);
+}
+
+function pushScript(out, script) {
+  if (script.length >= 253) throw new Error("A script is too long.");
+  out.push(script.length);
+  for (const b of script) out.push(b);
+}
+
+function le32(out, n) {
+  const x = Number(n);
+  out.push(x & 255, (x >>> 8) & 255, (x >>> 16) & 255, (x >>> 24) & 255);
+}
+
+function le64(out, n) {
+  let x = BigInt(n);
+  for (let i = 0; i < 8; i++) {
+    out.push(Number(x & 0xffn));
+    x >>= 8n;
+  }
+}
+
+async function buildSignedTx(payment, blob) {
+  const { pub, sigs } = readSigs(blob);
+  if (sigs.length !== payment.inputs.length) {
+    throw new Error("The codes do not match this payment.");
+  }
+  const got = await hash160(pub);
+  const want = payment.walletHash160;
+  if (!want || got.length !== want.length) throw new Error("That key is not this Game Boy.");
+  for (let i = 0; i < got.length; i++) {
+    if (got[i] !== want[i]) throw new Error("That key is not this Game Boy.");
+  }
+  const hasChange = payment.change >= DUST;
+  const out = [];
+  le32(out, 1);
+  out.push(payment.inputs.length);
+  for (let i = 0; i < payment.inputs.length; i++) {
+    const txid = String(payment.inputs[i].txid).toLowerCase();
+    if (!/^[0-9a-f]{64}$/.test(txid)) throw new Error("A txid must be 64 hex characters.");
+    for (let b = 62; b >= 0; b -= 2) out.push(parseInt(txid.slice(b, b + 2), 16));
+    le32(out, payment.inputs[i].vout);
+    const sig = sigs[i];
+    const script = new Uint8Array(sig.length + pub.length + 2);
+    script[0] = sig.length;
+    script.set(sig, 1);
+    script[1 + sig.length] = pub.length;
+    script.set(pub, 2 + sig.length);
+    pushScript(out, script);
+    le32(out, 0xffffffff);
+  }
+  out.push(hasChange ? 2 : 1);
+  le64(out, payment.pay);
+  pushScript(out, scriptFor(payment.typeByte, payment.hash160));
+  if (hasChange) {
+    le64(out, payment.change);
+    pushScript(out, scriptP2pkh(payment.walletHash160));
+  }
+  le32(out, 0);
+  return out.map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
 function selectCoins(utxos, sendValue, feeRate, recipientIsP2sh) {
   if (sendValue <= 0n) throw new Error("Amount must be more than 0.");
   const sorted = utxos.filter((u) => u.spendable !== false).sort((a, b) => {
@@ -467,6 +698,11 @@ return {
   encodeString,
   stripTyped,
   decodeString,
+  ripemd160,
+  hash160,
+  parseSigPage,
+  assembleSigBlob,
+  buildSignedTx,
   priceFixed,
   selectCoins,
 };
