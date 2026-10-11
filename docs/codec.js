@@ -1,8 +1,11 @@
 // DogeGB typed-payment string, format version 1.
 //
-// The page builds these bytes, base58-encodes them, and inserts a check
-// character as the 8th character of every group. A 4-byte double-SHA256
-// is fixed to 6 characters at the end.
+// The page builds these bytes and base58-encodes them. Every line is 8
+// characters. The 8th is the mod-58 sum of the first 7. A payment line uses
+// that sum. The checksum line adds 1..7, and the amount added is how many
+// payment characters sit at the front of that line (0..6). Two to six
+// leftover payment characters make the checksum two lines. The hash fills
+// every spare character.
 //
 // Bytes, big-endian:
 //   0x01            version
@@ -26,7 +29,10 @@ const KOINU = 100_000_000n;
 const DUST = 1_000_000n;
 const MAX_INPUTS = 4;
 const FORMAT_VERSION = 0x01;
-const TAIL_CHARS = 6;
+// Hash characters available for leftover counts 0..6, then the most bytes
+// that still fit in that many base58 digits.
+const HASH_CHARS = [7, 6, 12, 11, 10, 9, 8];
+const HASH_BYTES = [5, 4, 8, 8, 7, 6, 5];
 
 const P2PKH = 0x1e;
 const P2SH = 0x16;
@@ -272,60 +278,41 @@ function decodePayload(bytes) {
   return { inputs, pay, fee, change, typeByte, hash160 };
 }
 
-function checkChar(chunk) {
+function sumIndex(chunk) {
   let sum = 0;
   for (const ch of chunk) sum += alphabetIndex(ch);
-  return ALPHABET[sum % 58];
+  return sum;
 }
 
-function groupData(dataChars) {
-  const groups = [];
-  for (let i = 0; i < dataChars.length; i += 7) {
-    const chunk = dataChars.slice(i, i + 7);
-    groups.push(chunk + checkChar(chunk));
-  }
-  return groups;
+function checkChar(chunk, delta) {
+  return ALPHABET[(sumIndex(chunk) + delta) % 58];
 }
 
-function ungroup(body) {
-  let data = "";
-  let i = 0;
-  let groupNo = 1;
-  while (i < body.length) {
-    const n = body.length - i >= 8 ? 8 : body.length - i;
-    if (n < 2) throw new Error("Group " + groupNo + " is too short.");
-    const group = body.slice(i, i + n);
-    const chunk = group.slice(0, -1);
-    if (group[group.length - 1] !== checkChar(chunk)) {
-      throw new Error("Group " + groupNo + " does not check.");
-    }
-    data += chunk;
-    i += n;
-    groupNo++;
-  }
-  return data;
+function groupDelta(group) {
+  if (group.length !== 8) throw new Error("A group must be 8 characters.");
+  const got = alphabetIndex(group[7]);
+  const expect = sumIndex(group.slice(0, 7)) % 58;
+  return (got - expect + 58) % 58;
 }
 
-function encodeTail(hash4) {
-  if (hash4.length !== 4) throw new Error("End hash must be 4 bytes.");
+function encodeFixed(bytes, width) {
   let n = 0n;
-  for (const b of hash4) n = (n << 8n) + BigInt(b);
+  for (const b of bytes) n = (n << 8n) + BigInt(b);
   let out = "";
-  for (let i = 0; i < TAIL_CHARS; i++) {
+  for (let i = 0; i < width; i++) {
     const r = n % 58n;
     n /= 58n;
     out = ALPHABET[Number(r)] + out;
   }
-  if (n !== 0n) throw new Error("End hash does not fit in 6 characters.");
+  if (n !== 0n) throw new Error("End hash does not fit.");
   return out;
 }
 
-function decodeTail(text) {
-  if (text.length !== TAIL_CHARS) throw new Error("End check must be 6 characters.");
+function decodeFixed(text, nbytes) {
   let n = 0n;
   for (const ch of text) n = n * 58n + BigInt(alphabetIndex(ch));
-  const out = new Uint8Array(4);
-  for (let i = 3; i >= 0; i--) {
+  const out = new Uint8Array(nbytes);
+  for (let i = nbytes - 1; i >= 0; i--) {
     out[i] = Number(n & 0xffn);
     n >>= 8n;
   }
@@ -333,16 +320,39 @@ function decodeTail(text) {
   return out;
 }
 
+function encodeGroups(dataChars, hashBytes) {
+  const r = dataChars.length % 7;
+  const groups = [];
+  const full = dataChars.slice(0, dataChars.length - r);
+  for (let i = 0; i < full.length; i += 7) {
+    const chunk = full.slice(i, i + 7);
+    groups.push(chunk + checkChar(chunk, 0));
+  }
+  const hashText = encodeFixed(hashBytes, HASH_CHARS[r]);
+  if (r <= 1) {
+    const line = dataChars.slice(full.length) + hashText;
+    groups.push(line + checkChar(line, r + 1));
+    return groups;
+  }
+  const firstHash = 7 - r;
+  const line = dataChars.slice(full.length) + hashText.slice(0, firstHash);
+  const rest = hashText.slice(firstHash);
+  groups.push(line + checkChar(line, r + 1));
+  groups.push(rest + checkChar(rest, 0));
+  return groups;
+}
+
 async function encodeString(payment) {
   const payload = encodePayload(payment);
-  const groups = groupData(b58encode(payload));
-  const tailHash = (await sha256d(payload)).slice(0, 4);
-  const tail = encodeTail(tailHash);
+  const dataChars = b58encode(payload);
+  const r = dataChars.length % 7;
+  const hashBytes = HASH_BYTES[r];
+  const groups = encodeGroups(dataChars, (await sha256d(payload)).slice(0, hashBytes));
   return {
     payload,
     groups,
-    tail,
-    typedCount: groups.reduce((n, g) => n + g.length, 0) + tail.length,
+    hashBytes,
+    typedCount: groups.length * 8,
   };
 }
 
@@ -352,15 +362,44 @@ function stripTyped(text) {
 
 async function decodeString(text) {
   const raw = stripTyped(text);
-  if (raw.length <= TAIL_CHARS) throw new Error("String is too short.");
-  const body = raw.slice(0, -TAIL_CHARS);
-  const tail = raw.slice(-TAIL_CHARS);
-  const dataChars = ungroup(body);
-  const payload = b58decode(dataChars);
-  const want = (await sha256d(payload)).slice(0, 4);
-  const got = decodeTail(tail);
-  for (let i = 0; i < 4; i++) {
-    if (want[i] !== got[i]) throw new Error("The end check does not match.");
+  if (raw.length < 8 || raw.length % 8 !== 0) throw new Error("String length is wrong.");
+  let data = "";
+  let hashText = null;
+  let hashBytes = 0;
+  let i = 0;
+  let groupNo = 1;
+  while (i < raw.length) {
+    if (hashText !== null) throw new Error("String has extra characters.");
+    const group = raw.slice(i, i + 8);
+    const delta = groupDelta(group);
+    if (delta === 0) {
+      data += group.slice(0, 7);
+      i += 8;
+      groupNo++;
+      continue;
+    }
+    if (delta > 7) throw new Error("Group " + groupNo + " does not check.");
+    const r = delta - 1;
+    data += group.slice(0, r);
+    hashText = group.slice(r, 7);
+    i += 8;
+    groupNo++;
+    if (r >= 2) {
+      if (i >= raw.length) throw new Error("The end check is cut off.");
+      const next = raw.slice(i, i + 8);
+      if (groupDelta(next) !== 0) throw new Error("Group " + groupNo + " does not check.");
+      hashText += next.slice(0, 7);
+      i += 8;
+    }
+    if (hashText.length !== HASH_CHARS[r]) throw new Error("The end check is the wrong length.");
+    hashBytes = HASH_BYTES[r];
+  }
+  if (hashText === null) throw new Error("The end check is missing.");
+  const payload = b58decode(data);
+  const got = decodeFixed(hashText, hashBytes);
+  const want = (await sha256d(payload)).slice(0, hashBytes);
+  for (let b = 0; b < hashBytes; b++) {
+    if (want[b] !== got[b]) throw new Error("The end check does not match.");
   }
   return decodePayload(payload);
 }
@@ -409,7 +448,8 @@ return {
   DUST,
   MAX_INPUTS,
   FORMAT_VERSION,
-  TAIL_CHARS,
+  HASH_CHARS,
+  HASH_BYTES,
   alphabetIndex,
   b58encode,
   b58decode,
@@ -424,10 +464,6 @@ return {
   estimateSize,
   encodePayload,
   decodePayload,
-  groupData,
-  ungroup,
-  encodeTail,
-  decodeTail,
   encodeString,
   stripTyped,
   decodeString,

@@ -271,7 +271,6 @@ function typePages() {
     if (groups[i + 1]) items.push({ label: String(i + 2).padStart(2, "0"), text: groups[i + 1] });
     pages.push(items);
   }
-  pages.push([{ label: "Last", text: state.result.tail }]);
   return pages;
 }
 
@@ -599,12 +598,8 @@ function renderType() {
     h("p", { class: "chars" }, [item.text]),
   ]));
   screen.append(
-    h("h1", {}, [last ? "Last line" : "Type this"]),
-    h("p", { class: "lead" }, [
-      last
-        ? "Type this last line on the Game Boy, then stop."
-        : "Type every character. Skip the small number.",
-    ]),
+    h("h1", {}, ["Type this"]),
+    h("p", { class: "lead" }, ["Type every character. Skip the small number."]),
     h("p", { class: "note" }, [(state.page + 1) + " of " + pages.length]),
     h("div", { class: "type-row" }, blocks),
     h("div", { class: "actions" }, [

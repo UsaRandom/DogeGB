@@ -66,8 +66,8 @@ const payment = {
 };
 const encoded = await encodeString(payment);
 assert.ok(encoded.groups.length >= 1);
-assert.equal(encoded.tail.length, 6);
-const typed = encoded.groups.join("") + encoded.tail;
+assert.ok(encoded.groups.every((g) => g.length === 8));
+const typed = encoded.groups.join("");
 const back = await decodeString(typed);
 assert.equal(back.inputs.length, 1);
 assert.equal(back.inputs[0].txid, utxo.txid);
@@ -81,18 +81,44 @@ const swap = chars.slice();
 const tmp = swap[0];
 swap[0] = swap[1];
 swap[1] = tmp;
-const swapped = swap.join("") + encoded.groups.slice(1).join("") + encoded.tail;
+const swapped = swap.join("") + encoded.groups.slice(1).join("");
 await assert.rejects(decodeString(swapped), /end check/);
 
 const bad = chars.slice();
-const next = bad[0] === "2" ? "3" : "2";
-bad[0] = next;
-const substituted = bad.join("") + encoded.groups.slice(1).join("") + encoded.tail;
+const nextCh = bad[0] === "2" ? "3" : "2";
+bad[0] = nextCh;
+const substituted = bad.join("") + encoded.groups.slice(1).join("");
 await assert.rejects(decodeString(substituted), /Group 1/);
 
-const spaced = encoded.groups.map((g, i) => (i % 2 ? g : g)).join("  ") + "\n" + encoded.tail;
+const spaced = encoded.groups.join("  ");
 const fromSpaces = await decodeString(spaced);
 assert.equal(fromSpaces.pay, payment.pay);
+
+for (const n of [1, 2, 3, 4]) {
+  const inputs = [];
+  for (let i = 0; i < n; i++) {
+    inputs.push({
+      txid: (i + 1).toString(16).padStart(2, "0").repeat(32),
+      vout: i,
+      value: 1_000_000_000n,
+    });
+  }
+  const sample = {
+    inputs,
+    pay: payment.pay,
+    fee: payment.fee,
+    change: 1_000_000_000n * BigInt(n) - payment.pay - payment.fee,
+    typeByte: 0,
+    hash160: addr.hash160,
+  };
+  const enc = await encodeString(sample);
+  assert.ok(enc.groups.every((g) => g.length === 8));
+  const dec = await decodeString(enc.groups.join(""));
+  assert.equal(dec.inputs.length, n);
+  assert.equal(dec.pay, sample.pay);
+  assert.equal(dec.fee, sample.fee);
+}
+assert.equal(encoded.hashBytes, 5);
 
 const picked = selectCoins(
   [
