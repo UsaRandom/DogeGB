@@ -77,8 +77,10 @@ const back = await decodeString(typed);
 assert.equal(back.inputs.length, 1);
 assert.equal(back.inputs[0].txid, utxo.txid);
 assert.equal(back.inputs[0].vout, 1);
+assert.equal(back.inputs[0].value, undefined);
+assert.equal(encoded.payload[0], 0);
+assert.equal(encoded.payload.length, 73);
 assert.equal(back.pay, payment.pay);
-assert.equal(back.fee, payment.fee);
 assert.equal(back.change, payment.change);
 
 const chars = encoded.groups[0].split("");
@@ -93,7 +95,7 @@ const bad = chars.slice();
 const nextCh = bad[0] === "2" ? "3" : "2";
 bad[0] = nextCh;
 const substituted = bad.join("") + encoded.groups.slice(1).join("");
-await assert.rejects(decodeString(substituted), /Group 1/);
+await assert.rejects(decodeString(substituted), /Group 1|extra characters|end check/);
 
 const spaced = encoded.groups.join("  ");
 const fromSpaces = await decodeString(spaced);
@@ -108,11 +110,13 @@ for (const n of [1, 2, 3, 4]) {
       value: 1_000_000_000n,
     });
   }
+  const total = 1_000_000_000n * BigInt(n);
+  const planN = priceFixed(n, total, payment.pay, 1000n, false);
   const sample = {
     inputs,
     pay: payment.pay,
-    fee: payment.fee,
-    change: 1_000_000_000n * BigInt(n) - payment.pay - payment.fee,
+    fee: planN.fee,
+    change: planN.change,
     typeByte: 0,
     hash160: addr.hash160,
   };
@@ -120,10 +124,24 @@ for (const n of [1, 2, 3, 4]) {
   assert.ok(enc.groups.every((g) => g.length === 8));
   const dec = await decodeString(enc.groups.join(""));
   assert.equal(dec.inputs.length, n);
+  assert.equal(dec.inputs[0].value, undefined);
   assert.equal(dec.pay, sample.pay);
-  assert.equal(dec.fee, sample.fee);
+  assert.equal(dec.change, planN.change);
+  assert.equal(enc.payload.length, 2 + n * 34 + 37);
 }
-assert.equal(encoded.hashBytes, 5);
+const p2shPlan = priceFixed(1, utxo.value, payment.pay, 1000n, true);
+assert.equal(p2shPlan.fee, 224_000n);
+const p2shEnc = await encodeString({
+  inputs: [utxo],
+  pay: payment.pay,
+  fee: p2shPlan.fee,
+  change: p2shPlan.change,
+  typeByte: 1,
+  hash160: addr.hash160,
+});
+const p2shBack = await decodeString(p2shEnc.groups.join(""));
+assert.equal(p2shBack.change, p2shPlan.change);
+assert.equal(p2shBack.typeByte, 1);
 
 const picked = selectCoins(
   [

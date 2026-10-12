@@ -132,33 +132,6 @@ static uint8_t div10(uint8_t *n, uint8_t len) {
     return (uint8_t)rem;
 }
 
-static void add_be(uint8_t *a, const uint8_t *b) {
-    uint8_t i;
-    uint16_t c = 0;
-    for (i = 8u; i > 0u; i--) {
-        c = (uint16_t)(c + a[i - 1u] + b[i - 1u]);
-        a[i - 1u] = (uint8_t)c;
-        c >>= 8;
-    }
-}
-
-static uint8_t sub_be(uint8_t *a, const uint8_t *b) {
-    uint8_t i;
-    uint8_t borrow = 0;
-    for (i = 8u; i > 0u; i--) {
-        uint16_t av = a[i - 1u];
-        uint16_t bv = (uint16_t)b[i - 1u] + borrow;
-        if (av < bv) {
-            a[i - 1u] = (uint8_t)(av + 256u - bv);
-            borrow = 1u;
-        } else {
-            a[i - 1u] = (uint8_t)(av - bv);
-            borrow = 0u;
-        }
-    }
-    return borrow;
-}
-
 static uint8_t below_dust(const uint8_t *n) {
     static const uint8_t dust[8] = {0, 0, 0, 0, DUST_0, DUST_1, DUST_2, DUST_3};
     uint8_t i;
@@ -341,10 +314,8 @@ static uint8_t parse(char groups[][8], uint8_t count, uint8_t r) {
     uint8_t plen = 0;
     uint8_t got[8];
     uint8_t digest[32];
-    uint8_t fee[8];
     uint8_t pay[8];
     uint8_t change[8];
-    uint8_t value[4][8];
     uint8_t dest_h160[20];
     uint8_t *p;
     uint8_t left;
@@ -372,25 +343,22 @@ static uint8_t parse(char groups[][8], uint8_t count, uint8_t r) {
     sha256_final(&mem.scratch.sha, digest);
     if (memcmp(digest, got, HASH_BYTES[r]) != 0) return 0u;
 
-    if (plen < 2u || payload[0] != 0x01u) return 0u;
+    if (plen < 2u || payload[0] != 0x00u) return 0u;
     n_in = payload[1];
     if (n_in < 1u || n_in > 4u) return 0u;
     left = (uint8_t)(plen - 2u);
-    if (left != (uint8_t)(n_in * 42u + 33u)) return 0u;
+    if (left != (uint8_t)(n_in * 34u + 37u)) return 0u;
     p = payload + 2;
     for (g = 0; g < n_in; g++) {
         memcpy(txid[g], p, 32);
         p += 32;
         vout[g] = (uint16_t)(((uint16_t)p[0] << 8) | p[1]);
         p += 2;
-        memcpy(value[g], p, 8);
-        p += 8;
     }
     memcpy(pay, p, 8);
     p += 8;
-    memset(fee, 0, 8);
-    memcpy(fee + 4, p, 4);
-    p += 4;
+    memcpy(change, p, 8);
+    p += 8;
     dest_type = *p++;
     if (dest_type > 1u) return 0u;
     memcpy(dest_h160, p, 20);
@@ -399,10 +367,14 @@ static uint8_t parse(char groups[][8], uint8_t count, uint8_t r) {
        shares those bytes. */
     shorten(to_full, to_short);
     shorten(current_wallet.address, ch_short);
-    memset(change, 0, 8);
-    for (g = 0; g < n_in; g++) add_be(change, value[g]);
-    if (sub_be(change, pay) || sub_be(change, fee) || below_dust(change)) has_change = 0u;
-    else has_change = 1u;
+    /* The remainder is in the string. Below 0.01 DOGE there is no
+       change output, same as before. The fee is never worked out here. */
+    if (below_dust(change)) {
+        has_change = 0u;
+        memset(change, 0, 8);
+    } else {
+        has_change = 1u;
+    }
     memcpy(pay_be, pay, 8);
     memcpy(dest_h160_be, dest_h160, 20);
     if (has_change) memcpy(change_be, change, 8);

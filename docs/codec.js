@@ -1,4 +1,4 @@
-// DogeGB typed-payment string, format version 1.
+// DogeGB typed-payment string, format version 0.
 //
 // The page builds these bytes and base58-encodes them. Every line is 8
 // characters. The 8th is the mod-58 sum of the first 7. A payment line uses
@@ -8,27 +8,29 @@
 // every spare character.
 //
 // Bytes, big-endian:
-//   0x01            version
+//   0x00            version
 //   u8              input count, 1..4
 //   repeated:
 //     32            txid, block-explorer order
 //     u16           vout
-//     u64           value, koinu
 //   u64             pay value, koinu
-//   u32             fee, koinu
+//   u64             change, koinu, back to this wallet
 //   u8              0 = pay-to-address, 1 = pay-to-script
 //   20              hash160 of the destination
 //
-// Change is not in the string. It is the inputs minus the payment minus
-// the fee, and it pays this wallet. Version, locktime, and sequence stay
-// at 1, 0, and 0xffffffff and are not in the string.
+// Coin amounts and the fee are not in the string. The page chooses the
+// change before typing. The Game Boy shows that change and signs it.
+// A change below 0.01 DOGE is not an output. Exactly 0.01 stays.
+// Version, locktime, and sequence stay at 1, 0, and 0xffffffff and are
+// not in the string.
 
 globalThis.DogeCodec = (function () {
 const ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
 const KOINU = 100_000_000n;
 const DUST = 1_000_000n;
 const MAX_INPUTS = 4;
-const FORMAT_VERSION = 0x01;
+const FORMAT_VERSION = 0x00;
+const FEE_PER_BYTE = 1000n;
 // Hash characters available for leftover counts 0..6, then the most bytes
 // that still fit in that many base58 digits.
 const HASH_CHARS = [7, 6, 12, 11, 10, 9, 8];
@@ -176,17 +178,6 @@ function pushU16(out, n) {
   out.push((n >> 8) & 255, n & 255);
 }
 
-function pushU32(out, n) {
-  if (n < 0n || n > 0xffffffffn) throw new Error("Fee is too large to encode.");
-  let x = n;
-  const b = [0, 0, 0, 0];
-  for (let i = 3; i >= 0; i--) {
-    b[i] = Number(x & 0xffn);
-    x >>= 8n;
-  }
-  out.push(...b);
-}
-
 function pushU64(out, n) {
   if (n < 0n || n > 0xffffffffffffffffn) throw new Error("Value does not fit in 8 bytes.");
   let x = n;
@@ -200,11 +191,6 @@ function pushU64(out, n) {
 
 function readU16(bytes, p) {
   return (bytes[p] << 8) | bytes[p + 1];
-}
-
-function readU32(bytes, p) {
-  return (BigInt(bytes[p]) << 24n) | (BigInt(bytes[p + 1]) << 16n) |
-    (BigInt(bytes[p + 2]) << 8n) | BigInt(bytes[p + 3]);
 }
 
 function readU64(bytes, p) {
@@ -227,19 +213,22 @@ function encodePayload(payment) {
     if (!/^[0-9a-f]{64}$/.test(txid)) throw new Error("A txid must be 64 hex characters.");
     for (let i = 0; i < 64; i += 2) out.push(parseInt(txid.slice(i, i + 2), 16));
     pushU16(out, inp.vout);
-    pushU64(out, inp.value);
-    total += inp.value;
+    if (typeof inp.value === "bigint") total += inp.value;
   }
   if (payment.pay <= 0n) throw new Error("Amount must be more than 0.");
-  if (payment.fee < 0n) throw new Error("Fee is negative.");
-  if (total !== payment.pay + payment.fee + payment.change) {
-    throw new Error("Coins, payment, fee, and change do not add up.");
-  }
-  pushU64(out, payment.pay);
-  pushU32(out, payment.fee);
+  if (payment.change < 0n) throw new Error("Change is negative.");
   if (payment.typeByte !== 0 && payment.typeByte !== 1) {
     throw new Error("Destination type is unknown.");
   }
+  if (total > 0n) {
+    const plan = priceFixed(inputs.length, total, payment.pay, FEE_PER_BYTE, payment.typeByte === 1);
+    if (!plan) throw new Error("Those coins do not cover the payment and the fee.");
+    if (payment.fee !== plan.fee || payment.change !== plan.change) {
+      throw new Error("Change does not match the payment.");
+    }
+  }
+  pushU64(out, payment.pay);
+  pushU64(out, payment.change);
   out.push(payment.typeByte);
   if (payment.hash160.length !== 20) throw new Error("Destination hash is the wrong length.");
   for (const b of payment.hash160) out.push(b);
@@ -259,23 +248,20 @@ function decodePayload(bytes) {
   const n = need(1)[0];
   if (n < 1 || n > MAX_INPUTS) throw new Error("Input count is out of range.");
   const inputs = [];
-  let total = 0n;
   for (let i = 0; i < n; i++) {
     const txidBytes = need(32);
     let txid = "";
     for (const b of txidBytes) txid += b.toString(16).padStart(2, "0");
     const vout = readU16(need(2), 0);
-    const value = readU64(need(8), 0);
-    total += value;
-    inputs.push({ txid, vout, value });
+    inputs.push({ txid, vout });
   }
   const pay = readU64(need(8), 0);
-  const fee = readU32(need(4), 0);
+  const change = readU64(need(8), 0);
   const typeByte = need(1)[0];
   const hash160 = need(20);
   if (p !== bytes.length) throw new Error("String has extra bytes.");
-  const change = total - pay - fee;
-  return { inputs, pay, fee, change, typeByte, hash160 };
+  if (typeByte !== 0 && typeByte !== 1) throw new Error("Destination type is unknown.");
+  return { inputs, pay, change, typeByte, hash160 };
 }
 
 function sumIndex(chunk) {
@@ -418,7 +404,7 @@ function priceFixed(numInputs, totalIn, sendValue, feeRate, recipientIsP2sh) {
   }
   if (totalIn >= sendValue + feeNo && change < DUST) {
     const fee = totalIn - sendValue;
-    if (fee > 0xffffffffn) throw new Error("Fee is too large to encode.");
+    if (fee > 0xffffffffn) throw new Error("Fee is too large.");
     return { fee, change: 0n, size: noChangeSize, totalIn };
   }
   return null;
@@ -678,6 +664,7 @@ return {
   KOINU,
   DUST,
   MAX_INPUTS,
+  FEE_PER_BYTE,
   FORMAT_VERSION,
   HASH_CHARS,
   HASH_BYTES,

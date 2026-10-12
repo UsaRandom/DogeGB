@@ -6,7 +6,7 @@ const {
   dogeToKoinu,
   encodeString,
   extractPayment,
-  feeRatePerByte,
+  FEE_PER_BYTE,
   formatDoge,
   parseSigPage,
   priceFixed,
@@ -31,8 +31,6 @@ const state = {
   destText: "",
   amountText: "",
   amountFromCode: false,
-  feeText: "0.01",
-  feeSource: "default",
   coins: [],
   nextId: 1,
   lookup: "idle",
@@ -50,30 +48,9 @@ const state = {
   sending: false,
 };
 
-// Fee is automatic and nothing is stored in the browser.
-// Dogecoin Core 1.14.x: RECOMMENDED_MIN_TX_FEE = 0.01 DOGE/kB is the wallet
-// default; min relay is a tenth of that (0.001). We use the lookup service's
-// low estimate, never below 0.01 and never above the old 1.0 default.
-const FEE_FLOOR_PER_KB = 1000000n;   // 0.01 DOGE
-const FEE_CAP_PER_KB = 100000000n;   // 1.0 DOGE
-
-async function fetchFeeRate() {
-  try {
-    const res = await fetch("https://api.blockcypher.com/v1/doge/main");
-    if (!res.ok) return;
-    const data = parseJsonBig(await res.text());
-    const raw = data.low_fee_per_kb;
-    if (raw === undefined || raw === null) return;
-    let perKb = asBig(raw);
-    if (perKb < FEE_FLOOR_PER_KB) perKb = FEE_FLOOR_PER_KB;
-    if (perKb > FEE_CAP_PER_KB) perKb = FEE_CAP_PER_KB;
-    state.feeText = formatDoge(perKb);
-    state.feeSource = "network";
-    if (state.step === "pay") { rememberPay(); render(); }
-  } catch { /* keep the 0.01 DOGE/kB default */ }
-}
-fetchFeeRate();
-
+// The page picks the fee at 1000 koinu per byte (0.01 DOGE per kB) and
+// puts the leftover in the typed string as the change. Coin amounts and
+// the fee itself are not typed. The Game Boy does not work out a fee.
 const STEP_NAMES = ["Wallet", "Pay", "Check", "Sign & send"];
 const EXPLORER = "https://blockchair.com/dogecoin/transaction/";
 
@@ -81,6 +58,7 @@ let scanGen = 0;
 let sendGen = 0;
 let stream = null;
 let cameraAsked = false;
+let idleCam = false;
 
 function h(tag, props, children) {
   const node = document.createElement(tag);
@@ -382,18 +360,6 @@ function walletForm() {
 }
 
 function renderHome() {
-  if (wide()) {
-    screen.append(
-      h("h1", {}, ["Send Dogecoin"]),
-      h("p", { class: "lead" }, ["On your Game Boy, open the address code."]),
-      h("p", { class: "lead" }, ["Type it here. Your words and your key stay on the Game Boy."]),
-      walletForm(),
-      h("div", { class: "actions" }, [
-        secondary("Scan the code", () => startScan("wallet")),
-      ])
-    );
-    return;
-  }
   screen.append(
     h("h1", {}, ["Send Dogecoin"]),
     h("p", { class: "lead" }, ["On your Game Boy, open the address code."]),
@@ -535,13 +501,8 @@ function renderPay() {
   };
   const markFee = () => {
   };
-  const currentRate = () => {
-    try { return feeRatePerByte(state.feeText || "0.01"); } catch { return null; }
-  };
   const applyPick = (which) => {
-    const rate = currentRate();
-    if (!rate) { quote.replaceChildren(h("p", { class: "hint err" }, ["The network fee could not be worked out."])); return; }
-    const max = sendAllPlan(rate, destKind === "p2sh");
+    const max = sendAllPlan(FEE_PER_BYTE, destKind === "p2sh");
     if (!max) {
       quote.replaceChildren(h("p", { class: "hint err" }, ["There is not enough Dogecoin to cover a network fee."]));
       return;
@@ -584,11 +545,6 @@ function renderPay() {
     // P2SH outputs are 2 bytes smaller, so Send all moves when the kind changes.
     if (state.sendAll && oldKind !== destKind) { applyPick("max"); return; }
     if (state.lookup !== "done") { quote.replaceChildren(); return; }
-    const rate = currentRate();
-    if (!rate) {
-      quote.replaceChildren(h("p", { class: "hint err" }, ["The network fee could not be worked out."]));
-      return;
-    }
     if (!amount.value.trim()) { quote.replaceChildren(); return; }
     let pay;
     try { pay = dogeToKoinu(amount.value); } catch {
@@ -597,10 +553,10 @@ function renderPay() {
     }
     if (pay <= 0n) { quote.replaceChildren(); return; }
     try {
-      const { plan } = planFor(pay, rate, destKind === "p2sh");
+      const { plan } = planFor(pay, FEE_PER_BYTE, destKind === "p2sh");
       const left = totalSpendable() - pay - plan.fee;
       quote.replaceChildren(
-        quoteRow("Network fee (auto)", friendlyDoge(plan.fee) + " DOGE"),
+        quoteRow("Network fee", friendlyDoge(plan.fee) + " DOGE"),
         quoteRow("Total leaving", friendlyDoge(pay + plan.fee) + " DOGE"),
         quoteRow("Left on Game Boy", friendlyDoge(left < 0n ? 0n : left) + " DOGE"),
       );
@@ -737,17 +693,10 @@ async function submitPay() {
     render();
     return;
   }
-  let rate;
-  try { rate = feeRatePerByte(state.feeText || "0.01"); }
-  catch {
-    state.formError = "The network fee could not be worked out. Go back and try again.";
-    render();
-    return;
-  }
   let plan;
   let inputs;
   try {
-    ({ plan, inputs } = planFor(pay, rate, dest.kind === "p2sh"));
+    ({ plan, inputs } = planFor(pay, FEE_PER_BYTE, dest.kind === "p2sh"));
   } catch (problem) {
     state.formError = plainPayError(problem.message, pay);
     render();
@@ -1031,14 +980,14 @@ function renderScan() {
     h("p", { class: "lead" }, [signed
       ? signedProgress()
       : (live
-        ? "Starting the camera…"
+        ? (idleCam ? "On your Game Boy, open the address code, then point this camera at it. Your words and key stay on the Game Boy." : "Starting the camera…")
         : "This browser cannot open a live camera here (Lockdown Mode, an in-app browser or a non-secure page). Take a photo of the code instead.")]),
   ];
-  if (live) bits.push(h("div", { class: "finder" }, [h("div", { class: "frame" })]));
+  if (live) bits.push(h("div", { class: idleCam ? "finder cam-off" : "finder" }, [h("div", { class: "frame" })]));
   bits.push(h("p", { class: "bad" }, [state.scanError]));
   if (live) {
     // Shown only when no camera is running: after a denial or a re-render.
-    const retry = primary("Try camera again", retryCamera);
+    const retry = primary(idleCam ? "Start camera" : "Try camera again", retryCamera);
     retry.id = "retry-cam";
     bits.push(retry);
   }
@@ -1097,6 +1046,7 @@ function attachCamera(request) {
 
 function retryCamera() {
   if (cameraAsked) return;
+  idleCam = false;
   const request = beginCamera();
   state.scanError = "";
   const bad = screen.querySelector(".bad");
@@ -1349,6 +1299,7 @@ function startSignedScan() {
   state.scanError = "";
   state.step = "scan";
   cameraAsked = false;
+  idleCam = false;
   render();
   attachCamera(request);
 }
@@ -1511,11 +1462,30 @@ function startScan(which) {
   state.scanError = "";
   state.step = "scan";
   cameraAsked = false;
+  idleCam = false;
   render();
   attachCamera(request);
 }
 
+// The app opens on the wallet camera. Safari on iPhone only starts a camera
+// from a tap, so it shows a Start camera button; other browsers start it
+// at once when permission was already granted.
+function autoStartCamera() {
+  if (!idleCam || iphone() || !cameraAvailable() || !navigator.permissions) return;
+  navigator.permissions.query({ name: "camera" }).then((p) => {
+    if (p.state === "granted" && idleCam && state.step === "scan") retryCamera();
+  }).catch(() => {});
+}
+
 function render() {
+  let opening = false;
+  if (state.step === "home") {
+    state.step = "scan";
+    state.scanFor = "wallet";
+    state.scanError = "";
+    idleCam = true;
+    opening = true;
+  }
   stopCamera();
   parkCamera();
   document.body.classList.toggle("scanning", state.step === "scan");
@@ -1526,7 +1496,7 @@ function render() {
     dotsEl.append(h("span", { class: i === step ? "on" : (i < step ? "done" : ""), "aria-hidden": "true" }, ["●"]));
   }
   dotsEl.append(h("span", { class: "steptext" }, ["Step " + (step + 1) + " of 4 · " + STEP_NAMES[step]]));
-  const showBack = state.step !== "home";
+  const showBack = !(state.step === "scan" && state.scanFor === "wallet");
   backBtn.hidden = !showBack;
   backBtn.onclick = () => {
     if (state.step === "scan") {
@@ -1550,6 +1520,7 @@ function render() {
   else if (state.step === "scan") renderScan();
   else if (state.step === "send") renderSend();
   else if (state.step === "sent") renderSent();
+  if (opening) autoStartCamera();
 }
 
 backBtn.addEventListener("click", () => {});
