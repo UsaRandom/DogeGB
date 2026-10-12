@@ -12,6 +12,9 @@ const {
   priceFixed,
   scriptP2pkh,
   selectCoins,
+  estimateSize,
+  MAX_INPUTS,
+  DUST,
 } = globalThis.DogeCodec;
 
 const screen = document.getElementById("screen");
@@ -28,7 +31,8 @@ const state = {
   destText: "",
   amountText: "",
   amountFromCode: false,
-  feeText: "1.0",
+  feeText: "0.01",
+  feeSource: "default",
   coins: [],
   nextId: 1,
   lookup: "idle",
@@ -42,7 +46,36 @@ const state = {
   txHex: "",
   txHash: "",
   sendError: "",
+  sendAll: false,
+  sending: false,
 };
+
+// Fee is automatic and nothing is stored in the browser.
+// Dogecoin Core 1.14.x: RECOMMENDED_MIN_TX_FEE = 0.01 DOGE/kB is the wallet
+// default; min relay is a tenth of that (0.001). We use the lookup service's
+// low estimate, never below 0.01 and never above the old 1.0 default.
+const FEE_FLOOR_PER_KB = 1000000n;   // 0.01 DOGE
+const FEE_CAP_PER_KB = 100000000n;   // 1.0 DOGE
+
+async function fetchFeeRate() {
+  try {
+    const res = await fetch("https://api.blockcypher.com/v1/doge/main");
+    if (!res.ok) return;
+    const data = parseJsonBig(await res.text());
+    const raw = data.low_fee_per_kb;
+    if (raw === undefined || raw === null) return;
+    let perKb = asBig(raw);
+    if (perKb < FEE_FLOOR_PER_KB) perKb = FEE_FLOOR_PER_KB;
+    if (perKb > FEE_CAP_PER_KB) perKb = FEE_CAP_PER_KB;
+    state.feeText = formatDoge(perKb);
+    state.feeSource = "network";
+    if (state.step === "pay") { rememberPay(); render(); }
+  } catch { /* keep the 0.01 DOGE/kB default */ }
+}
+fetchFeeRate();
+
+const STEP_NAMES = ["Wallet", "Pay", "Check", "Sign & send"];
+const EXPLORER = "https://blockchair.com/dogecoin/transaction/";
 
 let scanGen = 0;
 let sendGen = 0;
@@ -71,6 +104,30 @@ function friendlyDoge(koinu) {
   const [whole, frac] = body.split(".");
   const trimmed = frac.replace(/0+$/, "");
   return (neg ? "-" : "") + (trimmed ? whole + "." + trimmed : whole);
+}
+
+function shortAddr(text) {
+  const t = String(text || "");
+  return t.length > 12 ? t.slice(0, 5) + "…" + t.slice(-4) : t;
+}
+
+// Shows a short address or txid; tap to toggle the full value. The title holds the full value.
+function addrView(full, tag) {
+  const el = h(tag || "p", {
+    class: "addr short", title: full, role: "button", tabindex: "0",
+    "aria-label": full + ". Tap to show the full value.", "aria-pressed": "false",
+  }, [shortAddr(full)]);
+  el.dataset.full = full;
+  const flip = () => {
+    const open = el.getAttribute("aria-pressed") !== "true";
+    el.setAttribute("aria-pressed", open ? "true" : "false");
+    el.textContent = open ? spaced(full) : shortAddr(full);
+  };
+  el.addEventListener("click", flip);
+  el.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); flip(); }
+  });
+  return el;
 }
 
 function spaced(text) {
@@ -117,10 +174,8 @@ function go(step) {
 function rememberPay() {
   const dest = document.getElementById("dest");
   const amount = document.getElementById("amount");
-  const fee = document.getElementById("fee");
   if (dest) state.destText = dest.value;
   if (amount) state.amountText = amount.value;
-  if (fee) state.feeText = fee.value;
 }
 
 function hexEq(a, b) {
@@ -363,7 +418,10 @@ function renderFound() {
   const total = totalSpendable();
   const bits = [
     h("h1", {}, ["Your Game Boy"]),
-    h("p", { class: "addr" }, [spaced(state.wallet.text)]),
+    h("div", { class: "addrrow" }, [
+      addrView(state.wallet.text),
+      copyButton("Copy", () => state.wallet.text),
+    ]),
     h("p", { class: "lead" }, ["Anything left over comes back to this wallet."]),
   ];
   if (state.lookup === "loading") {
@@ -378,7 +436,7 @@ function renderFound() {
     bits.push(primary("Scan a different wallet", () => startScan("wallet")));
     bits.push(addCoinForm());
   } else {
-    bits.push(h("p", { class: "money" }, ["You have " + friendlyDoge(total) + " DOGE."]));
+    bits.push(h("p", { class: "money" }, [friendlyDoge(total) + " DOGE", h("small", {}, ["Available on your Game Boy"])]));
     bits.push(h("div", { class: "actions" }, [
       primary("Continue", () => go("pay")),
     ]));
@@ -424,19 +482,36 @@ function addCoinForm() {
   ]);
 }
 
+function copyButton(label, getText) {
+  const btn = h("button", { class: "chip copy", type: "button" }, [label]);
+  btn.addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText(getText());
+      btn.textContent = "Copied";
+    } catch {
+      btn.textContent = "Copy failed";
+    }
+    setTimeout(() => { btn.textContent = label; }, 1600);
+  });
+  return btn;
+}
+
+function quoteRow(label, value) {
+  return h("div", { class: "row" }, [h("span", {}, [label]), h("span", {}, [value])]);
+}
+
 function renderPay() {
   const dest = h("input", {
     id: "dest", type: "text", value: state.destText,
     autocomplete: "off", spellcheck: "false", autocapitalize: "off",
-    placeholder: "Their address",
+    placeholder: "Starts with D or 9 or A", enterkeyhint: "next",
   });
   const amount = h("input", {
     id: "amount", type: "text", inputmode: "decimal", value: state.amountText,
-    autocomplete: "off",
+    autocomplete: "off", placeholder: "0", enterkeyhint: "done",
   });
-  const fee = h("input", {
-    id: "fee", type: "text", inputmode: "decimal", value: state.feeText, autocomplete: "off",
-  });
+  const destHint = h("p", { class: "hint", id: "dest-hint", "aria-live": "polite" }, []);
+  const quote = h("div", { class: "quote", id: "quote", "aria-live": "polite" }, []);
   const bits = [
     h("h1", {}, ["Who are you paying?"]),
   ];
@@ -444,26 +519,170 @@ function renderPay() {
   else if (state.lookup === "done") {
     const total = totalSpendable();
     bits.push(h("p", { class: "money" }, [
-      total === 0n ? "There is no Dogecoin to send yet." : "You have " + friendlyDoge(total) + " DOGE.",
+      total === 0n ? "No Dogecoin to send yet." : friendlyDoge(total) + " DOGE",
+      h("small", {}, [total === 0n ? "Receive some on the Game Boy first." : "Available on your Game Boy"]),
     ]));
   } else if (state.lookup === "error") {
-    bits.push(h("p", { class: "bad" }, ["The lookup did not answer."]));
+    bits.push(h("p", { class: "bad" }, ["The lookup did not answer. Go back and try again, or add a coin under More options."]));
   }
   if (state.amountFromCode) bits.push(h("p", { class: "note" }, ["The amount was filled in from their code."]));
-  bits.push(secondary("Scan their code", () => { rememberPay(); startScan("dest"); }));
-  bits.push(h("div", { class: "pay-fields" }, [
-    h("label", {}, ["Their address", dest]),
-    h("label", { class: "amount" }, ["How much?", amount]),
-  ]));
-  bits.push(h("p", { class: "bad" }, [state.formError]));
-  bits.push(h("div", { class: "actions" }, [
-    primary("Next", () => submitPay()),
-  ]));
-  bits.push(advanced(fee));
+
+  let quoteGen = 0;
+  let destKind = null;
+  const chips = [];
+  const markChips = (which) => {
+    for (const c of chips) c.setAttribute("aria-pressed", c.dataset.pick === which ? "true" : "false");
+  };
+  const markFee = () => {
+  };
+  const currentRate = () => {
+    try { return feeRatePerByte(state.feeText || "0.01"); } catch { return null; }
+  };
+  const applyPick = (which) => {
+    const rate = currentRate();
+    if (!rate) { quote.replaceChildren(h("p", { class: "hint err" }, ["The network fee could not be worked out."])); return; }
+    const max = sendAllPlan(rate, destKind === "p2sh");
+    if (!max) {
+      quote.replaceChildren(h("p", { class: "hint err" }, ["There is not enough Dogecoin to cover a network fee."]));
+      return;
+    }
+    let pay = max.pay;
+    if (which !== "max") pay = (max.pay * BigInt(which)) / 100n;
+    amount.value = friendlyDoge(pay);
+    state.sendAll = which === "max";
+    state.amountFromCode = false;
+    markChips(which);
+    updateQuote();
+  };
+  const updateQuote = async () => {
+    const gen = ++quoteGen;
+    state.destText = dest.value;
+    state.amountText = amount.value;
+    markFee();
+    const destText = dest.value.trim();
+    let decoded = null;
+    if (destText) {
+      try { decoded = await decodeAddress(destText); } catch { decoded = null; }
+    }
+    if (gen !== quoteGen) return;
+    const oldKind = destKind;
+    destKind = decoded ? decoded.kind : null;
+    dest.classList.toggle("valid", !!decoded);
+    dest.classList.toggle("invalid", !!destText && !decoded);
+    if (!destText) { destHint.className = "hint"; destHint.textContent = ""; }
+    else if (decoded) {
+      destHint.className = "hint ok";
+      destHint.textContent = decoded.text === (state.wallet && state.wallet.text)
+        ? "✓ This is your own Game Boy wallet."
+        : "✓ Valid Dogecoin address";
+    } else {
+      destHint.className = "hint err";
+      destHint.textContent = destText.length < 26
+        ? "Too short. A Dogecoin address is 34 characters."
+        : "Not a valid Dogecoin address. Check for a wrong character.";
+    }
+    // P2SH outputs are 2 bytes smaller, so Send all moves when the kind changes.
+    if (state.sendAll && oldKind !== destKind) { applyPick("max"); return; }
+    if (state.lookup !== "done") { quote.replaceChildren(); return; }
+    const rate = currentRate();
+    if (!rate) {
+      quote.replaceChildren(h("p", { class: "hint err" }, ["The network fee could not be worked out."]));
+      return;
+    }
+    if (!amount.value.trim()) { quote.replaceChildren(); return; }
+    let pay;
+    try { pay = dogeToKoinu(amount.value); } catch {
+      quote.replaceChildren(h("p", { class: "hint err" }, ["Use numbers only, like 12.5 (at most 8 decimals)."]));
+      return;
+    }
+    if (pay <= 0n) { quote.replaceChildren(); return; }
+    try {
+      const { plan } = planFor(pay, rate, destKind === "p2sh");
+      const left = totalSpendable() - pay - plan.fee;
+      quote.replaceChildren(
+        quoteRow("Network fee (auto)", friendlyDoge(plan.fee) + " DOGE"),
+        quoteRow("Total leaving", friendlyDoge(pay + plan.fee) + " DOGE"),
+        quoteRow("Left on Game Boy", friendlyDoge(left < 0n ? 0n : left) + " DOGE"),
+      );
+    } catch (problem) {
+      quote.replaceChildren(h("p", { class: "hint err" }, [plainPayError(problem.message, pay)]));
+    }
+  };
+
+  const pasteBtn = h("button", { class: "icon", type: "button", "aria-label": "Paste their address" }, ["Paste"]);
+  pasteBtn.addEventListener("click", async () => {
+    let text = "";
+    try { text = await navigator.clipboard.readText(); } catch {
+      destHint.className = "hint err";
+      destHint.textContent = "This browser blocked paste. Long-press the box and choose Paste.";
+      dest.focus();
+      return;
+    }
+    if (!text.trim()) {
+      destHint.className = "hint err";
+      destHint.textContent = "The clipboard is empty. Copy their address first.";
+      return;
+    }
+    const found = await readCode(text, true);
+    if (found.error) {
+      dest.value = text.trim().slice(0, 120);
+    } else {
+      dest.value = found.decoded.text;
+      if (found.amount && !amount.value.trim()) {
+        try { dogeToKoinu(found.amount); amount.value = found.amount; state.amountFromCode = true; } catch { /* ignore */ }
+      }
+    }
+    updateQuote();
+  });
+  const scanBtn = h("button", { class: "icon", type: "button", "aria-label": "Scan their code" }, ["Scan"]);
+  scanBtn.addEventListener("click", () => { rememberPay(); startScan("dest"); });
+
+  for (const pick of ["25", "50", "75", "max"]) {
+    const chip = h("button", { class: "chip", type: "button", "aria-pressed": "false" }, [pick === "max" ? "Max" : pick + "%"]);
+    chip.dataset.pick = pick;
+    chip.addEventListener("click", () => applyPick(pick));
+    chips.push(chip);
+  }
+  if (state.sendAll) markChips("max");
+
+  const clearErr = () => {
+    state.formError = "";
+    const bad = screen.querySelector("form .bad");
+    if (bad) bad.textContent = "";
+  };
+  for (const el of [dest, amount]) el.addEventListener("input", clearErr);
+  for (const c of [...chips, pasteBtn]) c.addEventListener("click", clearErr);
+  dest.addEventListener("input", updateQuote);
+  dest.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") { e.preventDefault(); amount.focus(); }
+  });
+  amount.addEventListener("input", () => { state.sendAll = false; state.amountFromCode = false; markChips(""); updateQuote(); });
+
+  const form = h("form", { class: "stack", novalidate: true, onsubmit: (e) => { e.preventDefault(); submitPay(); } }, [
+    h("div", { class: "field" }, [
+      h("label", { for: "dest" }, ["Their address"]),
+      h("div", { class: "inline" }, [dest, pasteBtn, scanBtn]),
+      destHint,
+    ]),
+    h("div", { class: "field amount" }, [
+      h("label", { for: "amount" }, ["How much? (DOGE)"]),
+      amount,
+      h("div", { class: "chips", role: "group", "aria-label": "Quick amounts" }, chips),
+    ]),
+    quote,
+    h("p", { class: "bad" }, [state.formError]),
+    h("div", { class: "actions" }, [
+      h("button", { class: "primary", type: "submit" }, ["Next"]),
+    ]),
+  ]);
+  bits.push(form);
+  bits.push(advanced());
   screen.append(...bits);
+  for (const box of screen.querySelectorAll(".coins input")) box.addEventListener("change", () => { if (state.sendAll) applyPick("max"); else updateQuote(); });
+  updateQuote();
 }
 
-function advanced(feeInput) {
+function advanced() {
   const list = h("ul", { class: "coins" }, spendable().map((coin) => {
     const box = h("input", { type: "checkbox", checked: coin.checked });
     box.addEventListener("change", () => { coin.checked = box.checked; });
@@ -478,8 +697,6 @@ function advanced(feeInput) {
   }));
   return h("details", {}, [
     h("summary", {}, ["More options"]),
-    h("p", { class: "note" }, ["Leave this alone unless a payment will not go through."]),
-    h("label", {}, ["Network fee, DOGE per 1000 bytes", feeInput]),
     h("p", { class: "note" }, ["Tick coins to choose them yourself. Leave them unticked and we choose."]),
     list,
     addCoinForm(),
@@ -502,14 +719,16 @@ async function submitPay() {
   let dest;
   try { dest = await decodeAddress(state.destText); }
   catch {
-    state.formError = "Check their address and try again.";
+    state.formError = state.destText.trim()
+      ? "That is not a valid Dogecoin address. Look for a missing or wrong character, or paste it again."
+      : "Add their address: paste it, scan their code, or type it.";
     render();
     return;
   }
   let pay;
   try { pay = dogeToKoinu(state.amountText); }
   catch {
-    state.formError = "Enter the amount in Dogecoin.";
+    state.formError = "Enter the amount in DOGE, like 12.5 (at most 8 decimals).";
     render();
     return;
   }
@@ -519,28 +738,16 @@ async function submitPay() {
     return;
   }
   let rate;
-  try { rate = feeRatePerByte(state.feeText || "1.0"); }
+  try { rate = feeRatePerByte(state.feeText || "0.01"); }
   catch {
-    state.formError = "The fee number looks wrong.";
+    state.formError = "The network fee could not be worked out. Go back and try again.";
     render();
     return;
   }
-  const chosen = checkedCoins();
   let plan;
   let inputs;
   try {
-    if (chosen.length === 0) {
-      if (spendable().length === 0) throw new Error("This wallet has no Dogecoin to send.");
-      const picked = selectCoins(spendable(), pay, rate, dest.kind === "p2sh");
-      plan = picked;
-      inputs = picked.chosen;
-    } else {
-      if (chosen.length > 4) throw new Error("Pick at most 4 coins.");
-      const total = chosen.reduce((n, c) => n + c.value, 0n);
-      plan = priceFixed(chosen.length, total, pay, rate, dest.kind === "p2sh");
-      if (!plan) throw new Error("Those coins do not cover the payment and the fee.");
-      inputs = chosen;
-    }
+    ({ plan, inputs } = planFor(pay, rate, dest.kind === "p2sh"));
   } catch (problem) {
     state.formError = plainPayError(problem.message, pay);
     render();
@@ -569,15 +776,61 @@ async function submitPay() {
   render();
 }
 
+function byValueDesc(a, b) {
+  if (a.value === b.value) return 0;
+  return a.value > b.value ? -1 : 1;
+}
+
+// The same plan submitPay uses: ticked coins priced as-is, otherwise selectCoins.
+function planFor(pay, rate, p2sh) {
+  const chosen = checkedCoins();
+  if (chosen.length === 0) {
+    if (spendable().length === 0) throw new Error("This wallet has no Dogecoin to send.");
+    const picked = selectCoins(spendable(), pay, rate, p2sh);
+    return { plan: picked, inputs: picked.chosen };
+  }
+  if (chosen.length > MAX_INPUTS) throw new Error("Pick at most 4 coins.");
+  const total = chosen.reduce((n, c) => n + c.value, 0n);
+  const plan = priceFixed(chosen.length, total, pay, rate, p2sh);
+  if (!plan) throw new Error("Those coins do not cover the payment and the fee.");
+  return { plan, inputs: chosen };
+}
+
+// Send all: the biggest amount that can leave with no change output.
+// A transaction holds at most 4 inputs, so try the largest 1..4 coins (in the
+// order selectCoins uses) and keep the smallest set that gives the most.
+// amount = sum(inputs) - size(inputs, no change) * rate, which is exactly the
+// priceFixed "no change" case, so the plan built from it has change 0 and
+// amount + fee == sum(inputs).
+function sendAllPlan(rate, p2sh) {
+  const chosen = checkedCoins();
+  const sets = [];
+  if (chosen.length) {
+    if (chosen.length > MAX_INPUTS) return null;
+    sets.push(chosen);
+  } else {
+    const sorted = spendable().slice().sort(byValueDesc);
+    for (let k = 1; k <= Math.min(MAX_INPUTS, sorted.length); k++) sets.push(sorted.slice(0, k));
+  }
+  let best = null;
+  for (const coins of sets) {
+    const total = coins.reduce((n, c) => n + c.value, 0n);
+    const fee = BigInt(estimateSize(coins.length, p2sh, false)) * rate;
+    const pay = total - fee;
+    if (pay >= DUST && (!best || pay > best.pay)) best = { pay, fee, total, count: coins.length };
+  }
+  return best;
+}
+
 function plainPayError(message, pay) {
   if (message.includes("no Dogecoin")) return "This wallet has no Dogecoin to send.";
   if (message.includes("first 4") || message.includes("at most 4")) {
-    return "That amount is split across too many coins. Try a smaller amount.";
+    return "That amount needs more than 4 coins. Tap Max to send the most one payment can carry, or send a smaller amount.";
   }
   if (message.includes("do not cover")) {
     const have = totalSpendable();
     if (have <= pay) return "You have " + friendlyDoge(have) + " DOGE. That is not enough.";
-    return "Keep a little back for the fee, or send a smaller amount.";
+    return "Keep a little back for the fee. Tap Max to send everything that fits.";
   }
   return message;
 }
@@ -588,14 +841,21 @@ function renderReview() {
   const lines = [
     h("h1", {}, ["Check this"]),
     h("p", { class: "money" }, ["Send " + friendlyDoge(plan.pay) + " DOGE"]),
-    h("p", { class: "addr" }, [spaced(state.dest.text)]),
-    h("p", { class: "lead" }, ["The network fee is " + friendlyDoge(plan.fee) + " DOGE."]),
-    h("p", { class: "lead" }, [
-      plan.change === 0n
-        ? "Nothing comes back. The rest goes to the fee."
-        : friendlyDoge(plan.change) + " DOGE comes back to your Game Boy.",
+    h("div", { class: "addrrow" }, [
+      addrView(state.dest.text),
+      copyButton("Copy", () => state.dest.text),
+    ]),
+    h("div", { class: "summary" }, [
+      quoteRow("Amount", friendlyDoge(plan.pay) + " DOGE"),
+      quoteRow("Network fee", friendlyDoge(plan.fee) + " DOGE"),
+      h("div", { class: "row total" }, [h("span", {}, ["Total leaving"]), h("span", {}, [friendlyDoge(plan.pay + plan.fee) + " DOGE"])]),
+      quoteRow("Back to Game Boy", plan.change === 0n ? "Nothing" : friendlyDoge(plan.change) + " DOGE"),
+      quoteRow("Coins used", String(plan.inputs.length)),
     ]),
   ];
+  if (plan.change === 0n && totalSpendable() - plan.pay - plan.fee > 0n) {
+    lines.push(h("p", { class: "note" }, ["Coins this payment does not use stay on the Game Boy."]));
+  }
   if (same) lines.push(h("p", { class: "note" }, ["This pays your own Game Boy. Only the fee leaves."]));
   lines.push(h("div", { class: "actions" }, [
     primary("Show what to type", () => go("type")),
@@ -605,17 +865,56 @@ function renderReview() {
 }
 
 function renderType() {
-  const rows = typePages().map((page) => h("div", { class: "type-row" }, page.map((item) => (
-    h("div", { class: "group-block" }, [
+  // Marks live on the code object, so a new code starts clean. Never stored.
+  if (!state.result.done) state.result.done = new Set();
+  const done = state.result.done;
+  const blocks = [];
+  const markNext = () => {
+    let found = false;
+    for (const b of blocks) {
+      const isNext = !found && !done.has(b.idx);
+      if (isNext) found = true;
+      b.el.classList.toggle("next", isNext);
+    }
+  };
+  const makeBlock = (item) => {
+    const idx = Number(item.label) - 1;
+    const el = h("div", {
+      class: "group-block" + (done.has(idx) ? " done" : ""), role: "button", tabindex: "0",
+      "aria-pressed": done.has(idx) ? "true" : "false",
+      "aria-label": "Group " + item.label + ": " + item.text.split("").join(" ") + ". Tap to mark typed.",
+    }, [
       h("p", { class: "num" }, [item.label]),
       h("p", { class: "chars" }, [item.text]),
-    ])
-  ))));
+    ]);
+    el.dataset.idx = String(idx);
+    const flip = () => {
+      if (done.has(idx)) done.delete(idx); else done.add(idx);
+      el.classList.toggle("done", done.has(idx));
+      el.setAttribute("aria-pressed", done.has(idx) ? "true" : "false");
+      markNext();
+    };
+    el.addEventListener("click", flip);
+    el.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); flip(); }
+    });
+    blocks.push({ idx, el });
+    return el;
+  };
+  const rows = typePages().map((page) => h("div", { class: "type-row" }, page.map(makeBlock)));
+  const reset = h("button", { class: "text reset", type: "button" }, ["Reset marks"]);
+  reset.addEventListener("click", () => {
+    done.clear();
+    for (const b of blocks) { b.el.classList.remove("done"); b.el.setAttribute("aria-pressed", "false"); }
+    markNext();
+  });
+  markNext();
   screen.append(
     h("h1", {}, ["Type this"]),
-    h("p", { class: "lead" }, ["Type every character. Skip the small number."]),
+    h("p", { class: "lead" }, ["Type every character. Skip the small number. Tap a group when it is typed."]),
     h("div", { class: "type-sheet" }, [
       ...rows,
+      reset,
       h("details", {}, [
         h("summary", {}, ["Save a copy"]),
         textButton("Copy everything", copyAll),
@@ -719,15 +1018,16 @@ function renderScan() {
     h("p", { class: "lead" }, [signed
       ? signedProgress()
       : (live
-        ? "Tap Allow the camera. Safari will ask before the picture starts."
-        : "Take a photo of the code.")]),
+        ? "Starting the camera…"
+        : "This browser cannot open a live camera here (Lockdown Mode, an in-app browser or a non-secure page). Take a photo of the code instead.")]),
   ];
   if (live) bits.push(h("div", { class: "finder" }, [h("div", { class: "frame" })]));
   bits.push(h("p", { class: "bad" }, [state.scanError]));
   if (live) {
-    const allow = primary("Allow the camera", askCamera);
-    allow.id = "allow-cam";
-    bits.push(allow);
+    // Shown only when no camera is running: after a denial or a re-render.
+    const retry = primary("Try camera again", retryCamera);
+    retry.id = "retry-cam";
+    bits.push(retry);
   }
   bits.push(h("label", {
     id: "take-photo",
@@ -740,43 +1040,54 @@ function renderScan() {
   if (live) placeCamera();
 }
 
-function askCamera() {
-  if (cameraAsked) return;
-  const video = document.getElementById("cam");
-  const button = document.getElementById("allow-cam");
-  const gen = scanGen;
-  if (!video || !cameraAvailable()) {
-    failCamera(gen, { name: "NotSupportedError" });
-    return;
-  }
-  cameraAsked = true;
-  if (button) button.disabled = true;
-  prepareCamera(video);
-  placeCamera();
-  const prime = video.play();
-  if (prime && prime.catch) prime.catch(() => {});
-  const bad = screen.querySelector(".bad");
-  if (bad) bad.textContent = "Asking for the camera…";
-  requestAnimationFrame(placeCamera);
-  let request;
+// iOS Safari only shows the camera prompt when getUserMedia is called inside
+// the tap itself. So every button that opens the scanner calls this first,
+// synchronously, before any render or await.
+function beginCamera() {
+  if (!cameraAvailable()) return null;
   try {
-    request = navigator.mediaDevices.getUserMedia({
+    return navigator.mediaDevices.getUserMedia({
       audio: false,
       video: { facingMode: { ideal: "environment" } },
     });
   } catch (err) {
-    cameraAsked = false;
-    if (button) button.disabled = false;
-    failCamera(gen, err);
+    return Promise.reject(err);
+  }
+}
+
+// Hook a started request to the scan screen that is now showing.
+function attachCamera(request) {
+  const gen = scanGen;
+  const video = document.getElementById("cam");
+  const retry = document.getElementById("retry-cam");
+  if (!request) return;
+  if (!video || state.step !== "scan") {
+    request.then(stopTracks).catch(() => {});
     return;
   }
+  cameraAsked = true;
+  if (retry) retry.hidden = true;
+  prepareCamera(video);
+  placeCamera();
+  const prime = video.play();
+  if (prime && prime.catch) prime.catch(() => {});
+  requestAnimationFrame(placeCamera);
   request.then((got) => {
     gotCamera(gen, got);
   }).catch((err) => {
     cameraAsked = false;
-    if (button) button.disabled = false;
     failCamera(gen, err);
   });
+}
+
+function retryCamera() {
+  if (cameraAsked) return;
+  const request = beginCamera();
+  state.scanError = "";
+  const bad = screen.querySelector(".bad");
+  if (bad) bad.textContent = "Starting the camera…";
+  if (!request) { failCamera(scanGen, { name: "NotSupportedError" }); return; }
+  attachCamera(request);
 }
 
 function failCamera(gen, problem) {
@@ -793,13 +1104,13 @@ function failCamera(gen, problem) {
   if (name === "NotAllowedError") {
     state.scanError = iphone()
       ? "Safari blocked the camera. Tap aA in the address bar, open Website Settings, and allow Camera."
-      : "The browser blocked the camera. Allow it for this site, then tap Allow the camera.";
+      : "The browser blocked the camera. Allow it for this site, then tap Try camera again.";
   } else {
     state.scanError = "The live camera did not start (" + name + "). Take a photo instead.";
   }
   const bad = screen.querySelector(".bad");
   if (bad) bad.textContent = state.scanError;
-  const button = document.getElementById("allow-cam");
+  const button = document.getElementById("retry-cam");
   if (button) {
     button.hidden = false;
     button.disabled = false;
@@ -826,7 +1137,7 @@ function gotCamera(gen, got) {
         ? signedProgress()
         : "Fill the box with the code. Hold steady.";
     }
-    const button = document.getElementById("allow-cam");
+    const button = document.getElementById("retry-cam");
     if (button) button.hidden = true;
     const bad = screen.querySelector(".bad");
     if (bad && state.scanError === "") bad.textContent = "";
@@ -853,7 +1164,7 @@ function gotCamera(gen, got) {
     if (gen !== scanGen || shown) return;
     if (video.readyState >= 2) show();
     else failCamera(gen, { name: "TimeoutError" });
-  }, 2000);
+  }, 8000);
   listenForCodes(gen, video);
 }
 
@@ -998,6 +1309,7 @@ function finishPay() {
   state.page = 0;
   state.amountText = "";
   state.amountFromCode = false;
+  state.sendAll = false;
   state.plan = null;
   state.result = null;
   clearSigned();
@@ -1007,11 +1319,13 @@ function finishPay() {
 
 function startSignedScan() {
   if (!state.plan || !state.wallet || !state.dest) return;
+  const request = beginCamera();
   state.scanFor = "signed";
   state.scanError = "";
   state.step = "scan";
   cameraAsked = false;
   render();
+  attachCamera(request);
 }
 
 async function useSigned(bytes) {
@@ -1040,8 +1354,8 @@ async function useSigned(bytes) {
   }
   state.step = "send";
   state.sendError = "";
+  state.sending = false;
   render();
-  broadcast();
   return "";
 }
 
@@ -1093,6 +1407,33 @@ async function broadcast() {
 }
 
 function renderSend() {
+  const plan = state.plan;
+  if (!state.sending && !state.sendError) {
+    screen.append(
+      h("h1", {}, ["Ready to send"]),
+      h("p", { class: "lead" }, ["The Game Boy signed it. Nothing has gone out yet."]),
+      h("div", { class: "summary" }, [
+        h("div", { class: "row" }, [h("span", {}, ["To"]), addrView(state.dest.text, "span")]),
+        quoteRow("Amount", friendlyDoge(plan.pay) + " DOGE"),
+        quoteRow("Network fee", friendlyDoge(plan.fee) + " DOGE"),
+        h("div", { class: "row total" }, [h("span", {}, ["Total leaving"]), h("span", {}, [friendlyDoge(plan.pay + plan.fee) + " DOGE"])]),
+      ]),
+      h("details", {}, [
+        h("summary", {}, ["Signed transaction"]),
+        h("p", { class: "raw" }, [state.txHex]),
+        copyButton("Copy raw transaction", () => state.txHex),
+      ]),
+      h("div", { class: "actions" }, [
+        primary("Send to the network", () => {
+          state.sending = true;
+          render();
+          broadcast();
+        }),
+        textButton("Not now", () => go("type")),
+      ])
+    );
+    return;
+  }
   const bits = [
     h("h1", {}, ["Sending"]),
     h("p", { class: "lead" }, [
@@ -1104,9 +1445,11 @@ function renderSend() {
     bits.push(h("div", { class: "actions" }, [
       primary("Try again", () => {
         state.sendError = "";
+        state.sending = true;
         render();
         broadcast();
       }),
+      copyButton("Copy raw transaction", () => state.txHex),
     ]));
   }
   screen.append(...bits);
@@ -1114,10 +1457,22 @@ function renderSend() {
 
 function renderSent() {
   const bits = [
+    h("p", { class: "pixel-ok", "aria-hidden": "true" }, ["✓"]),
     h("h1", {}, ["Sent"]),
-    h("p", { class: "lead" }, ["The payment is on the network."]),
+    h("p", { class: "lead" }, [
+      "The payment is on the network" + (state.plan ? ": " + friendlyDoge(state.plan.pay) + " DOGE." : "."),
+    ]),
   ];
-  if (state.txHash) bits.push(h("p", { class: "addr" }, [spaced(state.txHash)]));
+  if (state.txHash) {
+    bits.push(h("div", { class: "addrrow" }, [
+      addrView(state.txHash),
+      copyButton("Copy ID", () => state.txHash),
+    ]));
+    bits.push(h("a", {
+      class: "button", href: EXPLORER + encodeURIComponent(state.txHash),
+      target: "_blank", rel: "noopener noreferrer",
+    }, ["View on explorer ↗"]));
+  }
   bits.push(h("div", { class: "actions" }, [
     primary("Done", finishPay),
   ]));
@@ -1125,12 +1480,14 @@ function renderSent() {
 }
 
 function startScan(which) {
+  const request = beginCamera();
   rememberPay();
   state.scanFor = which;
   state.scanError = "";
   state.step = "scan";
   cameraAsked = false;
   render();
+  attachCamera(request);
 }
 
 function render() {
@@ -1141,8 +1498,9 @@ function render() {
   const step = stepIndex();
   dotsEl.replaceChildren();
   for (let i = 0; i < 4; i++) {
-    dotsEl.append(h("span", { class: i === step ? "on" : "" }, ["●"]));
+    dotsEl.append(h("span", { class: i === step ? "on" : (i < step ? "done" : ""), "aria-hidden": "true" }, ["●"]));
   }
+  dotsEl.append(h("span", { class: "steptext" }, ["Step " + (step + 1) + " of 4 · " + STEP_NAMES[step]]));
   const showBack = state.step !== "home";
   backBtn.hidden = !showBack;
   backBtn.onclick = () => {
@@ -1170,6 +1528,12 @@ function render() {
 }
 
 backBtn.addEventListener("click", () => {});
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape" || backBtn.hidden) return;
+  const tag = document.activeElement && document.activeElement.tagName;
+  if (tag === "INPUT" || tag === "TEXTAREA") { document.activeElement.blur(); return; }
+  backBtn.click();
+});
 let wideNow = wide();
 window.addEventListener("resize", () => {
   const next = wide();
