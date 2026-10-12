@@ -2,7 +2,7 @@
 
 Game Boy's Cold Storage Wallet for Dogecoin, Pepecoin, and Bellscoin!
 
-Spending is handled by [gbsign.app](https://gbsign.app), which lives in its own project. The copy under `docs/` is kept here for reference and for self use.
+Spending is handled by [signgb.app](https://signgb.app), which lives in its own project. The copy under `docs/` is kept here for reference and for self use.
 
 ## Features
 

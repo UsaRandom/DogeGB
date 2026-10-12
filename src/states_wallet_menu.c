@@ -148,7 +148,7 @@ void handle_wallet_menu(void) BANKED {
         set_bkg_data(250, 1, bang);
         set_bkg_data(251, 1, dot);
         draw_centered(0, "Scan to Begin!");
-        draw_centered(17, "gbsign.app");
+        draw_centered(17, "signgb.app");
 
         while (!joypad()) { stir_entropy(); }
         while (joypad()) { stir_entropy(); }

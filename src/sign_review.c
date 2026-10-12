@@ -22,8 +22,6 @@
 
 static const char ALPHA[] = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
 static const char HEX[] = "0123456789ABCDEF";
-static const uint8_t HASH_CHARS[7] = {7, 6, 12, 11, 10, 9, 8};
-static const uint8_t HASH_BYTES[7] = {5, 4, 8, 8, 7, 6, 5};
 static const uint8_t SPIN[12] = {1, 2, 3, 2, 1, 0, 1, 2, 3, 2, 1, 0};
 
 enum {
@@ -223,41 +221,34 @@ static uint8_t absorb(uint8_t *le, uint8_t *nle, char c) {
     return 1u;
 }
 
-/* Data characters are the first 7 of each payment group and the first
-   r of the end group. They decode straight into scratch.raw. */
-static uint8_t decode_groups(char groups[][8], uint8_t end, uint8_t r, uint8_t *plen) {
+/* Positions 2 .. 7*count-8 are the pad and the payload. Leading 1s are
+   the pad and are dropped. The last 7 data characters are the hash. */
+static uint8_t decode_body(char groups[][8], uint8_t count, uint8_t *plen) {
     uint8_t *le = mem.scratch.raw;
     uint8_t nle = 0;
-    uint16_t z = 0;
     uint8_t g;
     uint8_t i;
     uint8_t started = 0;
-    uint16_t k;
-    for (g = 0; g < end; g++) {
-        for (i = 0; i < 7u; i++) {
-            char c = groups[g][i];
-            if (!started && c == '1') { z++; continue; }
+    uint16_t pos = 0;
+    uint16_t end = (uint16_t)((uint16_t)count * 7u - 7u);
+    if (count < 2u || end < 2u) return 0u;
+    for (g = 0; g < count; g++) {
+        for (i = 0; i < 7u; i++, pos++) {
+            char c;
+            if (pos < 2u || pos >= end) continue;
+            c = groups[g][i];
+            if (!started && c == '1') continue;
             started = 1u;
             if (!absorb(le, &nle, c)) return 0u;
         }
     }
-    for (i = 0; i < r; i++) {
-        char c = groups[end][i];
-        if (!started && c == '1') { z++; continue; }
-        started = 1u;
-        if (!absorb(le, &nle, c)) return 0u;
-    }
-    if ((uint16_t)z + nle > 204u) return 0u;
+    if (!started || nle == 0u) return 0u;
     for (i = 0; i < (uint8_t)(nle / 2u); i++) {
         uint8_t t = le[i];
         le[i] = le[nle - 1u - i];
         le[nle - 1u - i] = t;
     }
-    if (z) {
-        for (k = nle; k > 0u; k--) le[z + k - 1u] = le[k - 1u];
-        for (k = 0; k < z; k++) le[k] = 0;
-    }
-    *plen = (uint8_t)(z + nle);
+    *plen = nle;
     return 1u;
 }
 
@@ -300,50 +291,45 @@ static uint8_t encode_addr(uint8_t version, const uint8_t h160[20], char *out) {
     return 1u;
 }
 
-static void append7(char *dst, uint16_t *n, const char *src, uint8_t from, uint8_t to) {
-    uint8_t i;
-    for (i = from; i < to; i++) dst[(*n)++] = src[i];
-}
-
-static uint8_t parse(char groups[][8], uint8_t count, uint8_t r) {
-    char hash[16];
-    uint16_t hlen = 0;
-    uint8_t end;
+/* 1 when the payment parses. 2 when the bytes are an older version.
+   0 when a check fails. */
+static uint8_t parse(char groups[][8], uint8_t count) {
     uint8_t g;
     uint8_t *payload;
     uint8_t plen = 0;
-    uint8_t got[8];
+    uint8_t got[5];
     uint8_t digest[32];
     uint8_t pay[8];
     uint8_t change[8];
     uint8_t dest_h160[20];
     uint8_t *p;
     uint8_t left;
-    if (r > 6u || count == 0u) return 0u;
-    end = (r >= 2u) ? (uint8_t)(count - 2u) : (uint8_t)(count - 1u);
-    if (end >= count) return 0u;
-    for (g = 0; g < end; g++) {
+    uint8_t a;
+    uint8_t b;
+    uint16_t named;
+    if (count < 2u) return 0u;
+    for (g = 0; g < count; g++) {
         if (group_delta(groups[g]) != 0u) return 0u;
     }
-    if (group_delta(groups[end]) != (uint8_t)(r + 1u)) return 0u;
-    append7(hash, &hlen, groups[end], r, 7);
-    if (r >= 2u) {
-        if (group_delta(groups[end + 1u]) != 0u) return 0u;
-        append7(hash, &hlen, groups[end + 1u], 0, 7);
-    }
-    if (hlen != HASH_CHARS[r]) return 0u;
-    if (!decode_groups(groups, end, r, &plen)) return 0u;
+    a = alpha_of(groups[0][0]);
+    b = alpha_of(groups[0][1]);
+    if (a == 0xffu || b == 0xffu) return 0u;
+    named = (uint16_t)((uint16_t)a * 58u + b);
+    if (named != count) return 0u;
+    if (!decode_body(groups, count, &plen)) return 0u;
     payload = mem.scratch.raw;
-    if (!decode_fixed(hash, hlen, got, HASH_BYTES[r])) return 0u;
+    if (!decode_fixed(groups[count - 1u], 7, got, 5)) return 0u;
     sha256_init(&mem.scratch.sha);
     sha256_update(&mem.scratch.sha, payload, plen);
     sha256_final(&mem.scratch.sha, digest);
     sha256_init(&mem.scratch.sha);
     sha256_update(&mem.scratch.sha, digest, 32);
     sha256_final(&mem.scratch.sha, digest);
-    if (memcmp(digest, got, HASH_BYTES[r]) != 0) return 0u;
+    if (memcmp(digest, got, 5) != 0) return 0u;
 
-    if (plen < 2u || payload[0] != 0x00u) return 0u;
+    if (plen < 1u) return 0u;
+    if (payload[0] != 0x01u) return 2u;
+    if (plen < 2u) return 0u;
     n_in = payload[1];
     if (n_in < 1u || n_in > 4u) return 0u;
     left = (uint8_t)(plen - 2u);
@@ -865,9 +851,11 @@ static uint8_t confirm_cancel(void) {
     return 0u;
 }
 
-uint8_t sign_review_open(char groups[][8], uint8_t count, uint8_t r) BANKED {
+uint8_t sign_review_open(char groups[][8], uint8_t count) BANKED {
     uint8_t prev;
-    if (!parse(groups, count, r)) return 0u;
+    uint8_t st = parse(groups, count);
+    if (st == 2u) return 3u;
+    if (st != 1u) return 0u;
     build_rows();
     si = 0;
     top = 0;

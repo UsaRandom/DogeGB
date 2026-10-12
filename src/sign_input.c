@@ -9,8 +9,8 @@
 
 #pragma bank 13
 
-/* Payment string from the web page. Every line is 8 characters. The 8th
-   matches the mod-58 sum, or that sum plus 1..7 on a checksum line. */
+/* Payment string from the web page. The first group names how many groups
+   there are. Every 8th character is the plain mod-58 sum of the other 7. */
 
 #define VRAM_BASE 96u
 #define SHEET_W 20u
@@ -69,6 +69,7 @@ static uint8_t caret_col;
 static uint8_t view_pair;
 static uint8_t sel;
 static uint8_t bad_group;
+static uint8_t note;
 
 /* Uppercase I and O are not base58. Lowercase i and o are, so those keys
    show only while shifted. Lowercase l is not base58, so L hides then. */
@@ -87,25 +88,29 @@ static uint8_t alpha_index(char c) {
     return 0xFFu;
 }
 
-/* 0..7 when the 8th character is a legal check. 0xFF when the line is
-   open or the check matches none of them. */
-static uint8_t group_delta(uint8_t g) {
+/* 0 while a character is still open, 1 when the 8th is the plain sum,
+   2 when the group is full and the sum does not match. */
+static uint8_t group_state(uint8_t g) {
     uint16_t sum = 0;
     uint8_t i;
-    uint8_t expect;
     uint8_t check;
     for (i = 0; i < GROUP_LEN; i++) {
-        if (!slots[g][i]) return 0xFFu;
+        if (!slots[g][i]) return 0u;
     }
     for (i = 0; i < 7u; i++) {
         uint8_t ix = alpha_index(slots[g][i]);
-        if (ix == 0xFFu) return 0xFFu;
+        if (ix == 0xFFu) return 2u;
         sum += ix;
     }
     check = alpha_index(slots[g][7]);
-    if (check == 0xFFu) return 0xFFu;
-    expect = (uint8_t)(sum % 58u);
-    return (uint8_t)((check + 58u - expect) % 58u);
+    if (check == 0xFFu || check != (uint8_t)(sum % 58u)) return 2u;
+    return 1u;
+}
+
+static uint16_t read_count(void) {
+    uint8_t a = alpha_index(slots[0][0]);
+    uint8_t b = alpha_index(slots[0][1]);
+    return (uint16_t)((uint16_t)a * 58u + b);
 }
 
 static uint8_t buffer_empty(void) {
@@ -242,8 +247,18 @@ static void paint_text(void) {
     uint8_t n;
     uint8_t g;
 
+    uint8_t col;
     clear_mark(MARK_X0);
     clear_mark(MARK_X1);
+    for (col = 0; col < 20u; col++) {
+        set_bkg_tile_xy(col, 3, 0);
+        set_bkg_tile_xy(col, 4, 0);
+    }
+    if (note == 1u) draw_text(3, "bad length", 5);
+    if (note == 2u) {
+        draw_text(3, "string from old app,", 0);
+        draw_text(4, "reload signgb.app", 1);
+    }
 
     n = (uint8_t)(view_pair + 1u);
     lab[0] = (char)('0' + n / 10u);
@@ -258,12 +273,11 @@ static void paint_text(void) {
     for (g = 0; g < 2u; g++) {
         uint8_t gi = (uint8_t)(view_pair + g);
         uint8_t x0 = g ? GROUP_X1 : GROUP_X0;
-        uint8_t delta = group_delta(gi);
         for (i = 0; i < GROUP_LEN; i++) {
             uint8_t pal = (caret_group == gi && caret_col == i) ? 1u : 0u;
             draw_slot(x0 + i, ROW_CHARS, slots[gi][i], pal);
         }
-        if (gi == bad_group || (delta != 0xFFu && delta > 7u))
+        if (gi == bad_group || group_state(gi) == 2u)
             draw_mark(g ? MARK_X1 : MARK_X0);
     }
 }
@@ -320,49 +334,55 @@ static void present_keyboard(void) {
 }
 
 /* 1 leaves Sign Tx for the wallet menu. Cancel comes back here. */
-static uint8_t open_review(uint8_t count, uint8_t r) {
-    uint8_t rev = sign_review_open(slots, count, r);
+static uint8_t open_review(uint8_t count) {
+    uint8_t rev;
+    note = 0;
+    rev = sign_review_open(slots, count);
     if (rev == 2u) return 1u;
-    if (!rev) bad_group = caret_group;
+    if (rev == 3u) note = 2u;
+    else if (!rev) bad_group = caret_group;
     else present_keyboard();
     paint_text();
     return 0u;
 }
 
-/* The first full group whose check is 1..7 ends the string. r is that
-   check minus 1. r of 2..6 needs one more plain group, then the review.
-   Returns 1 when the signature screens were left. */
+/* A full group with a bad sum stays marked. Review opens only when this
+   group's index matches the count named by group 1. Returns 1 when the
+   signature screens were left. */
 static uint8_t after_full_group(void) {
-    uint8_t d = group_delta(caret_group);
-    uint8_t r;
-    if (caret_group > 0) {
-        uint8_t prev = group_delta((uint8_t)(caret_group - 1u));
-        if (prev >= 1u && prev <= 7u) {
-            r = (uint8_t)(prev - 1u);
-            if (r >= 2u) {
-                if (d != 0u) {
-                    bad_group = caret_group;
-                    paint_text();
-                    return 0u;
-                }
-                return open_review((uint8_t)(caret_group + 1u), r);
-            }
-        }
+    uint16_t n;
+    note = 0;
+    if (group_state(caret_group) != 1u) {
+        bad_group = caret_group;
+        paint_text();
+        return 0u;
     }
-    if (d >= 1u && d <= 7u) {
-        r = (uint8_t)(d - 1u);
-        if (r >= 2u) {
-            if (caret_group + 1u < MAX_GROUPS) {
-                caret_group++;
-                caret_col = 0;
-                view_pair = (uint8_t)(caret_group & 0xFEu);
-            }
+    if (group_state(0) != 1u) {
+        bad_group = 0;
+        paint_text();
+        return 0u;
+    }
+    n = read_count();
+    if (n < 2u || n > MAX_GROUPS) {
+        bad_group = 0;
+        note = 1u;
+        paint_text();
+        return 0u;
+    }
+    if ((uint16_t)(caret_group + 1u) == n) {
+        uint8_t g;
+        for (g = 0; g < n; g++) {
+            if (group_state(g) == 1u) continue;
+            bad_group = g;
+            caret_group = g;
+            caret_col = 7u;
+            view_pair = (uint8_t)(g & 0xFEu);
             paint_text();
             return 0u;
         }
-        return open_review((uint8_t)(caret_group + 1u), r);
+        return open_review((uint8_t)n);
     }
-    if (d == 0u && caret_group + 1u < MAX_GROUPS) {
+    if (caret_group + 1u < MAX_GROUPS) {
         caret_group++;
         caret_col = 0;
         view_pair = (uint8_t)(caret_group & 0xFEu);
@@ -395,10 +415,10 @@ static uint8_t backspace(void) {
     uint8_t at_start = (caret_group == 0u && caret_col == 0u);
     uint8_t stay = 0;
     if (caret_col + 1u == GROUP_LEN && slots[caret_group][caret_col]) {
-        uint8_t d = group_delta(caret_group);
-        if (caret_group == bad_group || (d != 0xFFu && d > 7u)) stay = 1;
+        if (caret_group == bad_group || group_state(caret_group) == 2u) stay = 1;
     }
     bad_group = 0xFFu;
+    note = 0;
     if (!at_start && !stay) move_caret_left();
     if (slots[caret_group][caret_col]) {
         slots[caret_group][caret_col] = 0;
@@ -459,6 +479,7 @@ void sign_tx_input(void) BANKED {
     view_pair = 0;
     sel = 9;
     bad_group = 0xFFu;
+    note = 0;
 
     HIDE_SPRITES;
     clear_screen();

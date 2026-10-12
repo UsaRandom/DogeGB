@@ -1,14 +1,12 @@
-// DogeGB typed-payment string, format version 0.
+// DogeGB typed-payment string, format version 1.
 //
-// The page builds these bytes and base58-encodes them. Every line is 8
-// characters. The 8th is the mod-58 sum of the first 7. A payment line uses
-// that sum. The checksum line adds 1..7, and the amount added is how many
-// payment characters sit at the front of that line (0..6). Two to six
-// leftover payment characters make the checksum two lines. The hash fills
-// every spare character.
+// The page builds these bytes. The text is their base58, a group count
+// in front, and a 5-byte hash at the end. Every line is 8 characters.
+// The 8th is the plain mod-58 sum of the first 7. The first group names
+// how many groups there are, and that count is the only end of the string.
 //
 // Bytes, big-endian:
-//   0x00            version
+//   0x01            version
 //   u8              input count, 1..4
 //   repeated:
 //     32            txid, block-explorer order
@@ -22,19 +20,18 @@
 // change before typing. The Game Boy shows that change and signs it.
 // A change below 0.01 DOGE is not an output. Exactly 0.01 stays.
 // Version, locktime, and sequence stay at 1, 0, and 0xffffffff and are
-// not in the string.
+// not in the string. A zero version byte is rejected so the pad stays clear.
 
 globalThis.DogeCodec = (function () {
 const ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
 const KOINU = 100_000_000n;
 const DUST = 1_000_000n;
 const MAX_INPUTS = 4;
-const FORMAT_VERSION = 0x00;
+const FORMAT_VERSION = 0x01;
 const FEE_PER_BYTE = 1000n;
-// Hash characters available for leftover counts 0..6, then the most bytes
-// that still fit in that many base58 digits.
-const HASH_CHARS = [7, 6, 12, 11, 10, 9, 8];
-const HASH_BYTES = [5, 4, 8, 8, 7, 6, 5];
+// The Game Boy stores 48 groups. 48*7-9 base58 characters is the longest
+// payload it can take, about 239 bytes. Four inputs is 175 bytes.
+const MAX_GROUPS = 48;
 
 const P2PKH = 0x1e;
 const P2SH = 0x16;
@@ -244,7 +241,7 @@ function decodePayload(bytes) {
     return s;
   };
   const version = need(1)[0];
-  if (version !== FORMAT_VERSION) throw new Error("Unknown string version.");
+  if (version !== FORMAT_VERSION) throw new Error("String from old app, reload signgb.app");
   const n = need(1)[0];
   if (n < 1 || n > MAX_INPUTS) throw new Error("Input count is out of range.");
   const inputs = [];
@@ -306,38 +303,31 @@ function decodeFixed(text, nbytes) {
   return out;
 }
 
-function encodeGroups(dataChars, hashBytes) {
-  const r = dataChars.length % 7;
+async function wireEncode(payload) {
+  if (!(payload instanceof Uint8Array)) payload = Uint8Array.from(payload);
+  if (payload.length < 1 || payload[0] === 0) throw new Error("Version byte is zero.");
+  const d = b58encode(payload);
+  const n = Math.ceil((d.length + 9) / 7);
+  if (n < 2 || n > MAX_GROUPS) throw new Error("String is the wrong length.");
+  const pad = 7 * n - 9 - d.length;
+  const hashText = encodeFixed((await sha256d(payload)).slice(0, 5), 7);
+  const body = ALPHABET[(n / 58) | 0] + ALPHABET[n % 58] + "1".repeat(pad) + d + hashText;
+  if (body.length !== 7 * n) throw new Error("String is the wrong length.");
   const groups = [];
-  const full = dataChars.slice(0, dataChars.length - r);
-  for (let i = 0; i < full.length; i += 7) {
-    const chunk = full.slice(i, i + 7);
+  for (let i = 0; i < n; i++) {
+    const chunk = body.slice(i * 7, i * 7 + 7);
     groups.push(chunk + checkChar(chunk, 0));
   }
-  const hashText = encodeFixed(hashBytes, HASH_CHARS[r]);
-  if (r <= 1) {
-    const line = dataChars.slice(full.length) + hashText;
-    groups.push(line + checkChar(line, r + 1));
-    return groups;
-  }
-  const firstHash = 7 - r;
-  const line = dataChars.slice(full.length) + hashText.slice(0, firstHash);
-  const rest = hashText.slice(firstHash);
-  groups.push(line + checkChar(line, r + 1));
-  groups.push(rest + checkChar(rest, 0));
   return groups;
 }
 
 async function encodeString(payment) {
   const payload = encodePayload(payment);
-  const dataChars = b58encode(payload);
-  const r = dataChars.length % 7;
-  const hashBytes = HASH_BYTES[r];
-  const groups = encodeGroups(dataChars, (await sha256d(payload)).slice(0, hashBytes));
+  const groups = await wireEncode(payload);
   return {
     payload,
     groups,
-    hashBytes,
+    hashBytes: 5,
     typedCount: groups.length * 8,
   };
 }
@@ -346,47 +336,34 @@ function stripTyped(text) {
   return text.replace(/\s+/g, "");
 }
 
-async function decodeString(text) {
+async function wireDecode(text) {
   const raw = stripTyped(text);
-  if (raw.length < 8 || raw.length % 8 !== 0) throw new Error("String length is wrong.");
-  let data = "";
-  let hashText = null;
-  let hashBytes = 0;
-  let i = 0;
-  let groupNo = 1;
-  while (i < raw.length) {
-    if (hashText !== null) throw new Error("String has extra characters.");
-    const group = raw.slice(i, i + 8);
-    const delta = groupDelta(group);
-    if (delta === 0) {
-      data += group.slice(0, 7);
-      i += 8;
-      groupNo++;
-      continue;
-    }
-    if (delta > 7) throw new Error("Group " + groupNo + " does not check.");
-    const r = delta - 1;
-    data += group.slice(0, r);
-    hashText = group.slice(r, 7);
-    i += 8;
-    groupNo++;
-    if (r >= 2) {
-      if (i >= raw.length) throw new Error("The end check is cut off.");
-      const next = raw.slice(i, i + 8);
-      if (groupDelta(next) !== 0) throw new Error("Group " + groupNo + " does not check.");
-      hashText += next.slice(0, 7);
-      i += 8;
-    }
-    if (hashText.length !== HASH_CHARS[r]) throw new Error("The end check is the wrong length.");
-    hashBytes = HASH_BYTES[r];
+  if (raw.length < 16 || raw.length % 8 !== 0) throw new Error("String length is wrong.");
+  const count = raw.length / 8;
+  for (let i = 0; i < count; i++) {
+    const group = raw.slice(i * 8, i * 8 + 8);
+    if (groupDelta(group) !== 0) throw new Error("Group " + (i + 1) + " does not check.");
   }
-  if (hashText === null) throw new Error("The end check is missing.");
-  const payload = b58decode(data);
-  const got = decodeFixed(hashText, hashBytes);
-  const want = (await sha256d(payload)).slice(0, hashBytes);
-  for (let b = 0; b < hashBytes; b++) {
-    if (want[b] !== got[b]) throw new Error("The end check does not match.");
+  const n = alphabetIndex(raw[0]) * 58 + alphabetIndex(raw[1]);
+  if (n !== count) throw new Error("String length is wrong.");
+  let body = "";
+  for (let i = 0; i < count; i++) body += raw.slice(i * 8, i * 8 + 7);
+  const decoded = b58decode(body.slice(2, -7));
+  let skip = 0;
+  while (skip < decoded.length && decoded[skip] === 0) skip++;
+  const payload = decoded.slice(skip);
+  if (payload.length === 0) throw new Error("String ended early.");
+  const got = decodeFixed(body.slice(-7), 5);
+  const want = (await sha256d(payload)).slice(0, 5);
+  for (let i = 0; i < 5; i++) {
+    if (want[i] !== got[i]) throw new Error("The end check does not match.");
   }
+  return payload;
+}
+
+async function decodeString(text) {
+  const payload = await wireDecode(text);
+  if (payload[0] !== FORMAT_VERSION) throw new Error("String from old app, reload signgb.app");
   return decodePayload(payload);
 }
 
@@ -666,8 +643,7 @@ return {
   MAX_INPUTS,
   FEE_PER_BYTE,
   FORMAT_VERSION,
-  HASH_CHARS,
-  HASH_BYTES,
+  MAX_GROUPS,
   alphabetIndex,
   b58encode,
   b58decode,
@@ -685,6 +661,8 @@ return {
   encodeString,
   stripTyped,
   decodeString,
+  wireEncode,
+  wireDecode,
   ripemd160,
   hash160,
   parseSigPage,
