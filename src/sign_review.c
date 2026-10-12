@@ -88,6 +88,7 @@ static uint8_t spin_frame;
 static uint8_t spin_hold;
 
 extern wallet current_wallet;
+extern uint8_t current_mode;
 
 static uint8_t alpha_of(char c) {
     uint8_t i;
@@ -291,6 +292,20 @@ static uint8_t encode_addr(uint8_t version, const uint8_t h160[20], char *out) {
     return 1u;
 }
 
+/* P2PKH then P2SH. Doge is 0x1e/0x16. Pepe is 0x38/0x16. Bells is 0x19/0x1e. */
+static uint8_t pay_version(void) {
+    if (current_mode == PEPEGB) {
+        if (dest_type) return 0x16u;
+        return 0x38u;
+    }
+    if (current_mode == BELLSGB) {
+        if (dest_type) return 0x1eu;
+        return 0x19u;
+    }
+    if (dest_type) return 0x16u;
+    return 0x1eu;
+}
+
 /* 1 when the payment parses. 2 when the bytes are an older version.
    0 when a check fails. */
 static uint8_t parse(char groups[][8], uint8_t count) {
@@ -348,7 +363,7 @@ static uint8_t parse(char groups[][8], uint8_t count) {
     dest_type = *p++;
     if (dest_type > 1u) return 0u;
     memcpy(dest_h160, p, 20);
-    if (!encode_addr(dest_type ? 0x16u : 0x1eu, dest_h160, to_full)) return 0u;
+    if (!encode_addr(pay_version(), dest_h160, to_full)) return 0u;
     /* Address encode was the last user of the scratch. The text below
        shares those bytes. */
     shorten(to_full, to_short);
@@ -612,6 +627,11 @@ static uint8_t amount_lines(const char *full) {
     return 1u;
 }
 
+static uint8_t addr_lines(const char *full) {
+    if ((uint8_t)strlen(full) > 20u) return 2u;
+    return 1u;
+}
+
 /* Two blocks share rows 3-16. Back stays on row 17. */
 static void block_y(uint8_t h1, uint8_t h2, uint8_t *y1, uint8_t *y2) {
     uint8_t space = (uint8_t)(14u - h1 - h2);
@@ -632,45 +652,55 @@ static void draw_back(void) {
     SHOW_SPRITES;
 }
 
+static void show_input(uint8_t arg) {
+    uint8_t y1;
+    uint8_t y2;
+    char num[16];
+    char line[17];
+    uint16_t v;
+    uint8_t i;
+    draw_band("Input");
+    block_y(4, 1, &y1, &y2);
+    for (i = 0; i < 4u; i++) {
+        hex_line(txid[arg] + i * 8u, 8, line);
+        draw_center((uint8_t)(y1 + i), line);
+    }
+    v = vout[arg];
+    num[0] = 'o'; num[1] = 'u'; num[2] = 't'; num[3] = 'p';
+    num[4] = 'u'; num[5] = 't'; num[6] = ' ';
+    for (i = 5u; i > 0u; i--) {
+        num[6u + i] = (char)('0' + (v % 10u));
+        v = (uint16_t)(v / 10u);
+    }
+    num[12] = 0;
+    draw_center(y2, num);
+}
+
 static void show_detail(uint8_t code, uint8_t arg) {
     uint8_t prev;
     uint8_t y1;
     uint8_t y2;
-    char num[16];
-    uint16_t v;
-    uint8_t i;
-    char line[17];
-    const char *addr;
-    const char *amt;
     move_sprite(0, 0, 0);
     move_sprite(1, 0, 0);
     clear_screen();
-    if (code == S_TO || code == S_REM) {
-        addr = (code == S_TO) ? to_full : current_wallet.address;
-        amt = (code == S_TO) ? pay_full : ch_full;
-        draw_band(code == S_TO ? "To" : "Remainder");
-        block_y((uint8_t)(1u + ((uint8_t)strlen(addr) > 20u ? 2u : 1u)),
-                (uint8_t)(1u + amount_lines(amt)), &y1, &y2);
+    if (code == S_TO) {
+        draw_band("To");
+        block_y((uint8_t)(1u + addr_lines(to_full)),
+                (uint8_t)(1u + amount_lines(pay_full)), &y1, &y2);
         draw_bar(y1, "Address:");
-        draw_address_block((uint8_t)(y1 + 1u), addr);
+        draw_address_block((uint8_t)(y1 + 1u), to_full);
         draw_bar(y2, "Value:");
-        draw_amount_block((uint8_t)(y2 + 1u), amt);
+        draw_amount_block((uint8_t)(y2 + 1u), pay_full);
+    } else if (code == S_REM) {
+        draw_band("Remainder");
+        block_y((uint8_t)(1u + addr_lines(current_wallet.address)),
+                (uint8_t)(1u + amount_lines(ch_full)), &y1, &y2);
+        draw_bar(y1, "Address:");
+        draw_address_block((uint8_t)(y1 + 1u), current_wallet.address);
+        draw_bar(y2, "Value:");
+        draw_amount_block((uint8_t)(y2 + 1u), ch_full);
     } else if (code == S_IN) {
-        draw_band("Input");
-        block_y(4, 1, &y1, &y2);
-        for (i = 0; i < 4u; i++) {
-            hex_line(txid[arg] + i * 8u, 8, line);
-            draw_center((uint8_t)(y1 + i), line);
-        }
-        v = vout[arg];
-        num[0] = 'o'; num[1] = 'u'; num[2] = 't'; num[3] = 'p';
-        num[4] = 'u'; num[5] = 't'; num[6] = ' ';
-        for (i = 5u; i > 0u; i--) {
-            num[6u + i] = (char)('0' + (v % 10u));
-            v = (uint16_t)(v / 10u);
-        }
-        num[12] = 0;
-        draw_center(y2, num);
+        show_input(arg);
     }
     draw_back();
     prev = joypad();
