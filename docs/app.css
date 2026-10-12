@@ -357,7 +357,7 @@ body::before { content: ""; position: fixed; inset: 0; pointer-events: none; z-i
   background: repeating-linear-gradient(0deg, rgba(255,255,255,.018) 0 1px, transparent 1px 3px); }
 #app { position: relative; z-index: 1; }
 .top { grid-template-columns: 5.5rem 1fr 5.5rem; }
-.top::after { border-radius: 0; box-shadow: 0 0 18px rgba(232,184,74,.45); animation: spin 1.8s steps(1) infinite; }
+.top::after { border-radius: 0; box-shadow: none; filter: drop-shadow(0 0 6px rgba(232,184,74,.55)); animation: spin 1.8s steps(1) infinite; }
 /* Four 32px frames, played 1, 2, 3, 4, 3, 2, then back to 1. */
 @keyframes spin {
   0% { background-position: 0 0; }
