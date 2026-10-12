@@ -310,12 +310,14 @@ body.scanning .finder { flex: 1 1 auto; min-height: 12rem; }
   --panel: rgba(255,255,255,.055); --bad: #ff9a8a;
 }
 body { font: 17px/1.45 -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, system-ui, sans-serif;
-  -webkit-font-smoothing: antialiased; background:
+  -webkit-font-smoothing: antialiased; background: transparent; }
+/* Glow lives on its own fixed layer: iOS WebKit mis-paints background-attachment:fixed under composited layers. */
+html::before { content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none; background:
   radial-gradient(600px 420px at 85% -5%, rgba(232,184,74,.28), transparent 70%),
-  radial-gradient(500px 400px at -10% 30%, rgba(120,90,255,.16), transparent 70%), var(--bg); background-attachment: fixed; }
+  radial-gradient(500px 400px at -10% 30%, rgba(120,90,255,.16), transparent 70%), var(--bg); }
 .top { margin-bottom: .4rem; }
 .top::after { content: ""; grid-column: 3; justify-self: end; width: 32px; height: 32px; border-radius: 50%;
-  background: url(dogecoin.png?v=10) 0 0 / 32px 128px no-repeat; image-rendering: pixelated; box-shadow: 0 0 0 1px var(--line), 0 0 22px rgba(232,184,74,.45); }
+  background: url(dogecoin.png?v=11) 0 0 / 32px 128px no-repeat; image-rendering: pixelated; box-shadow: 0 0 0 1px var(--line), 0 0 22px rgba(232,184,74,.45); }
 #back { color: var(--ink); background: var(--panel); border: 1px solid var(--line); border-radius: 999px; padding: .4rem .9rem; font-size: .95rem;
   -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); }
 .dots { display: flex; justify-content: center; gap: 6px; letter-spacing: 0; }
@@ -357,7 +359,7 @@ body::before { content: ""; position: fixed; inset: 0; pointer-events: none; z-i
   background: repeating-linear-gradient(0deg, rgba(255,255,255,.018) 0 1px, transparent 1px 3px); }
 #app { position: relative; z-index: 1; }
 .top { grid-template-columns: 5.5rem 1fr 5.5rem; }
-.top::after { border-radius: 0; box-shadow: none; filter: drop-shadow(0 0 6px rgba(232,184,74,.55)); animation: spin 1.8s steps(1) infinite; }
+.top::after { border-radius: 0; box-shadow: none; filter: none; animation: spin 1.8s steps(1) infinite; }
 /* Four 32px frames, played 1, 2, 3, 4, 3, 2, then back to 1. */
 @keyframes spin {
   0% { background-position: 0 0; }
@@ -518,3 +520,17 @@ button.primary, button.secondary, label.pick, a.button { width: calc(100% - 6px)
 }
 [hidden] { display: none !important; }
 #app { z-index: auto; } /* keep the scan frame above the fixed video */
+
+/* Coin glow without filters: a separate static layer behind the sprite. */
+.top { position: relative; }
+.top::before { content: ""; position: absolute; right: -8px; top: 50%; width: 48px; height: 48px; margin-top: -24px; pointer-events: none;
+  background: radial-gradient(closest-side, rgba(232,184,74,.45), transparent); }
+
+/* ---- layout fixes (v14) ---- */
+/* No live camera: hide the aiming frame and show a plain placeholder. */
+.finder.cam-off .frame { display: none !important; }
+.finder.cam-off { background: repeating-conic-gradient(#111320 0 25%, #0c0d16 0 50%) 0 0 / 8px 8px; }
+/* Stacked full-width buttons share one width and one set of edges. */
+button.primary, button.secondary, button.text:not(.reset), label.pick, a.button {
+  box-sizing: border-box; width: calc(100% - 6px) !important; margin-left: 3px !important; margin-right: 3px !important;
+}

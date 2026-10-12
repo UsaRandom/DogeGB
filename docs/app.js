@@ -968,6 +968,8 @@ function placeCamera() {
   const video = document.getElementById("cam");
   const slot = document.querySelector(".finder");
   if (!video || !slot || state.step !== "scan") return;
+  // No camera running: keep the black video parked off screen.
+  if (slot.classList.contains("cam-off")) { parkCamera(); return; }
   const box = slot.getBoundingClientRect();
   const vv = window.visualViewport;
   const offsetLeft = vv ? vv.offsetLeft : 0;
@@ -984,10 +986,21 @@ function placeCamera() {
   frame.style.position = "fixed";
   frame.style.zIndex = "3";
   frame.style.inset = "auto";
-  frame.style.left = (box.left + offsetLeft + box.width * 0.12) + "px";
-  frame.style.top = (box.top + offsetTop + box.height * 0.14) + "px";
+  const wantLeft = box.left + box.width * 0.12;
+  const wantTop = box.top + box.height * 0.14;
+  frame.style.left = (wantLeft + offsetLeft) + "px";
+  frame.style.top = (wantTop + offsetTop) + "px";
   frame.style.width = (box.width * 0.76) + "px";
   frame.style.height = (box.height * 0.72) + "px";
+  // A filter, transform or backdrop-filter on an ancestor turns "fixed" into
+  // "relative to that ancestor". Measure where it landed and correct.
+  const got = frame.getBoundingClientRect();
+  const dx = wantLeft - got.left;
+  const dy = wantTop - got.top;
+  if (Math.abs(dx) > 0.5 || Math.abs(dy) > 0.5) {
+    frame.style.left = (parseFloat(frame.style.left) + dx) + "px";
+    frame.style.top = (parseFloat(frame.style.top) + dy) + "px";
+  }
 }
 
 function parkCamera() {
@@ -1067,6 +1080,8 @@ function attachCamera(request) {
   }
   cameraAsked = true;
   if (retry) retry.hidden = true;
+  const finder = screen.querySelector(".finder");
+  if (finder) finder.classList.remove("cam-off");
   prepareCamera(video);
   placeCamera();
   const prime = video.play();
@@ -1085,7 +1100,9 @@ function retryCamera() {
   const request = beginCamera();
   state.scanError = "";
   const bad = screen.querySelector(".bad");
-  if (bad) bad.textContent = "Starting the camera…";
+  if (bad) bad.textContent = "";
+  const lead = screen.querySelector(".lead");
+  if (lead && state.scanFor !== "signed") lead.textContent = "Starting the camera…";
   if (!request) { failCamera(scanGen, { name: "NotSupportedError" }); return; }
   attachCamera(request);
 }
@@ -1110,6 +1127,14 @@ function failCamera(gen, problem) {
   }
   const bad = screen.querySelector(".bad");
   if (bad) bad.textContent = state.scanError;
+  const finder = screen.querySelector(".finder");
+  if (finder) finder.classList.add("cam-off");
+  const lead = screen.querySelector(".lead");
+  if (lead) {
+    lead.textContent = state.scanFor === "signed"
+      ? signedProgress()
+      : "No live camera. Take a photo of the code, or type it.";
+  }
   const button = document.getElementById("retry-cam");
   if (button) {
     button.hidden = false;
