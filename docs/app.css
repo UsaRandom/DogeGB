@@ -315,7 +315,7 @@ body { font: 17px/1.45 -apple-system, BlinkMacSystemFont, "SF Pro Display", "Seg
   radial-gradient(500px 400px at -10% 30%, rgba(120,90,255,.16), transparent 70%), var(--bg); background-attachment: fixed; }
 .top { margin-bottom: .4rem; }
 .top::after { content: ""; grid-column: 3; justify-self: end; width: 32px; height: 32px; border-radius: 50%;
-  background: url(dogecoin.png) 0 0 / 32px 128px no-repeat; image-rendering: pixelated; box-shadow: 0 0 0 1px var(--line), 0 0 22px rgba(232,184,74,.45); }
+  background: url(dogecoin.png?v=10) 0 0 / 32px 128px no-repeat; image-rendering: pixelated; box-shadow: 0 0 0 1px var(--line), 0 0 22px rgba(232,184,74,.45); }
 #back { color: var(--ink); background: var(--panel); border: 1px solid var(--line); border-radius: 999px; padding: .4rem .9rem; font-size: .95rem;
   -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); }
 .dots { display: flex; justify-content: center; gap: 6px; letter-spacing: 0; }
@@ -357,8 +357,16 @@ body::before { content: ""; position: fixed; inset: 0; pointer-events: none; z-i
   background: repeating-linear-gradient(0deg, rgba(255,255,255,.018) 0 1px, transparent 1px 3px); }
 #app { position: relative; z-index: 1; }
 .top { grid-template-columns: 5.5rem 1fr 5.5rem; }
-.top::after { border-radius: 0; box-shadow: 0 0 18px rgba(232,184,74,.45); animation: spin 1.2s steps(1) infinite; }
-@keyframes spin { 0%{background-position:0 0} 25%{background-position:0 -32px} 50%{background-position:0 -64px} 75%{background-position:0 -96px} }
+.top::after { border-radius: 0; box-shadow: 0 0 18px rgba(232,184,74,.45); animation: spin 1.8s steps(1) infinite; }
+/* Four 32px frames, played 1, 2, 3, 4, 3, 2, then back to 1. */
+@keyframes spin {
+  0% { background-position: 0 0; }
+  16.666% { background-position: 0 -32px; }
+  33.333% { background-position: 0 -64px; }
+  50% { background-position: 0 -96px; }
+  66.666% { background-position: 0 -64px; }
+  83.333% { background-position: 0 -32px; }
+}
 @media (prefers-reduced-motion: reduce) { .top::after { animation: none; } }
 #back { font: 10px var(--pixel); min-height: 44px; border-radius: 12px; }
 #back::before { content: "◀ "; }
