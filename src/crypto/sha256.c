@@ -44,15 +44,14 @@ static const uint32_t k[64] = {
 /*********************** FUNCTION DEFINITIONS ***********************/
 void sha256_transform(SHA256_CTX *ctx, const uint8_t data[]) BANKED
 {
-	uint32_t a, b, c, d, e, f, g, h, i, j, t1, t2, m[64];
+	uint32_t a, b, c, d, e, f, g, h, t1, t2, w, m[16];
+	uint8_t i, j;
 
+	/* 16-word rolling schedule: m[64] put 256 bytes on a stack that
+	   only has about 1.2 KB under the wallet's globals. */
 	for (i = 0, j = 0; i < 16; ++i, j += 4) {
-		uint32_t temp = ((uint32_t)data[j + 3]) | (((uint32_t)data[j + 2]) << 8) | (((uint32_t)data[j + 1]) << 16) | (((uint32_t)data[j]) << 24);
-		m[i] = temp;
+		m[i] = ((uint32_t)data[j + 3]) | (((uint32_t)data[j + 2]) << 8) | (((uint32_t)data[j + 1]) << 16) | (((uint32_t)data[j]) << 24);
 	}
-
-	for ( ; i < 64; ++i)
-		m[i] = SIG1(m[i - 2]) + m[i - 7] + SIG0(m[i - 15]) + m[i - 16];
 
 	a = ctx->state[0];
 	b = ctx->state[1];
@@ -64,7 +63,13 @@ void sha256_transform(SHA256_CTX *ctx, const uint8_t data[]) BANKED
 	h = ctx->state[7];
 
 	for (i = 0; i < 64; ++i) {
-		t1 = h + EP1(e) + CH(e,f,g) + k[i] + m[i];
+		if (i < 16) {
+			w = m[i];
+		} else {
+			w = SIG1(m[(i - 2) & 15]) + m[(i - 7) & 15] + SIG0(m[(i - 15) & 15]) + m[i & 15];
+			m[i & 15] = w;
+		}
+		t1 = h + EP1(e) + CH(e,f,g) + k[i] + w;
 		t2 = EP0(a) + MAJ(a,b,c);
 		h = g;
 		g = f;

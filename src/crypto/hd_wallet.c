@@ -1,6 +1,7 @@
 #pragma bank 4
 
 #include <stdio.h>
+#include <string.h>
 
 #include "sha256.h"
 #include "secp256k1.h"
@@ -68,8 +69,8 @@ void seed_to_addresses(
     uint8_t chaincode[32];
     uint8_t I[64];
     uint8_t data[37];
-    uint8_t pubkey[33];
-    uint8_t child_key[32];
+    /* Stack is tight under the wallet's globals: the public key, the
+       child key and the hashes below reuse data, I and the out buffers. */
 
     const uint32_t path[5] = {
         0x8000002C, 0x80000003, 0x80000000, 0, 0
@@ -84,8 +85,7 @@ void seed_to_addresses(
             data[0] = 0x00;
             my_memcpy(data + 1, privkey, 32);
         } else {
-            secp256k1_pubkey(privkey, pubkey);
-            my_memcpy(data, pubkey, 33);
+            secp256k1_pubkey(privkey, data);
         }
         data[33] = (path[level] >> 24) & 0xFF;
         data[34] = (path[level] >> 16) & 0xFF;
@@ -111,11 +111,11 @@ void seed_to_addresses(
             return;
         }
 
-        bn256_add_mod_n(child_key, I, privkey);
+        bn256_add_mod_n(data, I, privkey);
 
         uint8_t is_zero = 1;
         for (int j = 0; j < 32; j++) {
-            if (child_key[j] != 0)
+            if (data[j] != 0)
             {
                 is_zero = 0;
                 break;
@@ -126,22 +126,22 @@ void seed_to_addresses(
             return;
         }
 
-        my_memcpy(privkey, child_key, 32);
+        my_memcpy(privkey, data, 32);
         my_memcpy(chaincode, I + 32, 32);
     }
 
-    uint8_t compressed_pub[33];
-    secp256k1_pubkey(privkey, compressed_pub);
+    secp256k1_pubkey(privkey, pubkey_out);
 
     my_memcpy(privkey_out, privkey, 32);
-    my_memcpy(pubkey_out, compressed_pub, 33);
+    memset(privkey, 0, sizeof(privkey));
+    memset(chaincode, 0, sizeof(chaincode));
 
     SHA256_CTX ctx;
-    uint8_t sha_hash[32];
-    uint8_t hash160[20];
+    uint8_t *sha_hash = I;
+    uint8_t *hash160 = I + 32;
 
     sha256_init(&ctx);
-    sha256_update(&ctx, compressed_pub, 33);
+    sha256_update(&ctx, pubkey_out, 33);
     sha256_final(&ctx, sha_hash);
     ripemd160(sha_hash, 32, hash160);
     add_progress(WEIGHT_HASH160);
@@ -164,8 +164,6 @@ void seed_to_addresses(
         my_memcpy(versioned + 1, hash160, 20);
 
         uint8_t checksum1[32];
-        uint8_t checksum2[32];
-        uint8_t checksum[4];
         uint8_t payload[25];
 
         sha256_init(&ctx);
@@ -174,11 +172,10 @@ void seed_to_addresses(
 
         sha256_init(&ctx);
         sha256_update(&ctx, checksum1, 32);
-        sha256_final(&ctx, checksum2);
+        sha256_final(&ctx, checksum1);
 
-        my_memcpy(checksum, checksum2, 4);
         my_memcpy(payload, versioned, 21);
-        my_memcpy(payload + 21, checksum, 4);
+        my_memcpy(payload + 21, checksum1, 4);
 
         int zeros = 0;
         while (zeros < 25 && payload[zeros] == 0) zeros++;

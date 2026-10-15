@@ -162,6 +162,7 @@ build/%GB.gb: $(SRC) build/wallet_sram.o
 	$(CC) $(CFLAGS) $(OPTFLAGS) -o $@ $^
 	python3 tools/patch_comb.py $@
 	python3 tools/patch_bitrot.py $@
+	python3 tools/check_stack.py $(@:.gb=.map)
 
 doge: test savedata build/DogeGB.gb
 pepe: test savedata build/PepeGB.gb
