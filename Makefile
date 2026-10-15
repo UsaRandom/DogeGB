@@ -169,3 +169,6 @@ pepe: test savedata build/PepeGB.gb
 bells: test savedata build/BellsGB.gb
 
 all: clean test savedata build/DogeGB.gb build/PepeGB.gb build/BellsGB.gb postclean
+# Slower stack check in the emulator (a few minutes or less). Run before a release.
+stackwalk:
+	for r in DogeGB PepeGB BellsGB; do python3 test/stack/stack_walk.py build/$$r.gb || exit 1; done
