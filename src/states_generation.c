@@ -43,7 +43,15 @@ void focus_create_wallet(void) BANKED {
     wordSelection = 12;
 }
 
+static void wipe_generation_keys(char *mnemonic) {
+    memset(seed, 0, sizeof(seed));
+    memset(privkey, 0, sizeof(privkey));
+    memset(pubkey, 0, sizeof(pubkey));
+    if (mnemonic) memset(mnemonic, 0, 109);
+}
+
 static void hang_failed(void) {
+    wipe_generation_keys(0);
 #ifndef TEST_MODE
     __asm__("ei");
 #endif
@@ -107,11 +115,7 @@ void handle_show_generated_words(void) BANKED {
 
 
 void handle_generate_address(void) BANKED {
-    char mnemonic_str[109] = {0};
-    for (uint8_t i = 0; i < 12; i++) {
-       if (i > 0) strcat(mnemonic_str, " ");
-       strcat(mnemonic_str, words[i]);
-    }
+    char mnemonic_str[109];
 
     show_progress_page();
 
@@ -126,17 +130,26 @@ void handle_generate_address(void) BANKED {
         }
     }
 
-    uint8_t local_seed[64];
-    uint8_t local_privkey[32];
-    uint8_t local_pubkey[33];
+    /* The globals seed/privkey/pubkey hold these; 129 bytes off the stack. */
+    uint8_t *local_seed = seed;
+    uint8_t *local_privkey = privkey;
+    uint8_t *local_pubkey = pubkey;
     char    local_address[35];// = "DNQAyz6kPHUedoxpaUdHeXWPhgLa8bAFX4";
     char    local_pepeaddress[35];// = "PqBraorEqyXRu5b5DPHaFnar4o36fuBBVY";
     char    local_bellsaddress[35];// = "BMiA4ScJqPAGYeGPTNxhDu9TZA3rcdG7wg";
 
     /* Once per cartridge: known wallet, then this mnemonic. */
-    if (!run_known_addr_check(local_seed, local_privkey, local_pubkey,
+    /* mnemonic_str doubles as the known check's phrase buffer, so the
+       check does not stack its own 109 bytes on top of this frame. */
+    if (!run_known_addr_check(mnemonic_str, local_seed, local_privkey, local_pubkey,
                               local_address, local_pepeaddress, local_bellsaddress)) {
         hang_failed();
+    }
+
+    mnemonic_str[0] = 0;
+    for (uint8_t i = 0; i < 12; i++) {
+       if (i > 0) strcat(mnemonic_str, " ");
+       strcat(mnemonic_str, words[i]);
     }
 
     mnemonic_to_seed(mnemonic_str, local_seed);
@@ -189,6 +202,9 @@ void handle_generate_address(void) BANKED {
     #ifndef TEST_MODE
     __asm__("ei");
     #endif
+
+    /* The keys now live in the encrypted slot. Do not leave them in RAM. */
+    wipe_generation_keys(mnemonic_str);
 
     progress_ride_end();
     current_state = STATE_WALLET_MENU;

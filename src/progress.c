@@ -230,9 +230,8 @@ void show_sign_progress(uint8_t n_in) BANKED {
    this bank. The caller's buffers are the ones address generation
    already has. A match is recorded before the caller derives the
    user's mnemonic. A mismatch leaves the byte alone. */
-uint8_t run_known_addr_check(uint8_t *seed, uint8_t *priv, uint8_t *pub,
+uint8_t run_known_addr_check(char *phrase, uint8_t *seed, uint8_t *priv, uint8_t *pub,
                              char *doge, char *pepe, char *bells) BANKED {
-    char phrase[109];
 
     if (addr_check_byte() == ADDR_CHECK_DONE) return 1;
 

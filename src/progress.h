@@ -30,7 +30,7 @@ void progress_ride_end(void) BANKED;
 /* The first address generation derives the known wallet in these
    buffers, then the caller's mnemonic. Later calls return at once.
    Returns 0 when the known addresses do not match. */
-uint8_t run_known_addr_check(uint8_t *seed, uint8_t *priv, uint8_t *pub,
+uint8_t run_known_addr_check(char *phrase, uint8_t *seed, uint8_t *priv, uint8_t *pub,
                              char *doge, char *pepe, char *bells) BANKED;
 
 /* Weights are GBC milliseconds.
